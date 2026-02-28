@@ -1,0 +1,45 @@
+name: AI Email Agent
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Email Agent
+        env:
+          YOUR_NAME:           ${{ secrets.YOUR_NAME }}
+          YOUR_EMAIL:          ${{ secrets.YOUR_EMAIL }}
+          GMAIL_APP_PASSWORD:  ${{ secrets.GMAIL_APP_PASSWORD }}
+          RESUME_DEVOPS_B64:   ${{ secrets.RESUME_DEVOPS_B64 }}
+          RESUME_SAP_B64:      ${{ secrets.RESUME_SAP_B64 }}
+          RESUME_DEFAULT_B64:  ${{ secrets.RESUME_DEFAULT_B64 }}
+          CC_DEVOPS:           ${{ secrets.CC_DEVOPS }}
+          CC_SAP:              ${{ secrets.CC_SAP }}
+          CC_DEFAULT:          ${{ secrets.CC_DEFAULT }}
+        run: python agent.py
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ github.run_number }}
+          path: logs/
+          retention-days: 30
