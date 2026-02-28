@@ -189,7 +189,8 @@ def fetch_unread_emails(your_email, app_password):
     mail.select("inbox")
 
     # Search unread emails
-    _, msg_ids = mail.search(None, "UNSEEN")
+    today = datetime.now().strftime("%d-%b-%Y")
+_, msg_ids = mail.search(None, f'(UNSEEN SINCE "{today}")')
     ids = msg_ids[0].split()
     log.info(f"📬 Found {len(ids)} unread emails")
 
