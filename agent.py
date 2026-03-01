@@ -38,6 +38,8 @@ log = logging.getLogger(__name__)
 # ─────────────────────────────────────────────
 SHARED_REPLY = """Hi,
 
+visa:opt-ead
+location:TEXAS(can work on w2 also-no need sponsership)
 I hope you're doing well. I'm writing to express my interest in any suitable opportunities that match my background and experience.
 
 I have several years of experience working in cloud, DevOps, and production support environments. My work has involved supporting live systems, automating deployments, improving monitoring and reliability, and collaborating closely with cross-functional teams to keep applications stable and performant.
