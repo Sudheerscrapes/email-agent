@@ -229,23 +229,28 @@ def extract_company(email):
 # GET RESUME FROM SECRET
 # ─────────────────────────────────────────────
 def get_resume(role):
-    b64 = os.environ.get(role["resume_secret"], "").strip()
+    b64 = os.environ.get(role["resume_secret"], "")
 
     if not b64:
         log.warning(f"  ⚠️ {role['resume_secret']} not set → using default")
-        b64 = os.environ.get(DEFAULT_ROLE["resume_secret"], "").strip()
+        b64 = os.environ.get(DEFAULT_ROLE["resume_secret"], "")
 
     if not b64:
         raise ValueError("No resume found! Add RESUME_DEFAULT_B64 to GitHub Secrets.")
+
+    # Strip ALL whitespace — GitHub secrets can add newlines/spaces
+    b64 = re.sub(r'\s+', '', b64)
 
     try:
         b64.encode("ascii")
     except UnicodeEncodeError:
         raise ValueError(
             f"❌ {role['resume_secret']} contains non-ASCII characters. "
-            "It must be a base64-encoded file, NOT raw text. "
-            "Run: base64 your_resume.docx | tr -d '\\n'  and paste that output as the secret."
+            "It must be a base64-encoded file, NOT raw text."
         )
+
+    # Fix padding if needed
+    b64 += "=" * (4 - len(b64) % 4) if len(b64) % 4 else ""
 
     log.info(f"  📎 Resume: {role['resume_secret']}")
     return base64.b64decode(b64)
@@ -275,7 +280,6 @@ def send_reply(email, role, your_name, your_email, app_password):
     encoders.encode_base64(part)
     fname = "Resume_Lingaraju_Modhala.docx"
     part.add_header("Content-Disposition", f'attachment; filename="{fname}"')
-    part.add_header("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document; name=\"Resume_Lingaraju_Modhala.docx\"")
     msg.attach(part)
 
     recipients = [to_email]
