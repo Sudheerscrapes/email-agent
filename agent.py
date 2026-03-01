@@ -239,24 +239,35 @@ RESUME_FILES = {
 }
 
 def get_resume(role):
-    # Try role-specific file first, then default
-    fname = RESUME_FILES.get(role["resume_secret"], "resume_default.b64")
-    fallback = "resume_default.b64"
+    secret_name = role["resume_secret"]
 
-    # Try role-specific file
+    # 1. Try GitHub Secret (env variable) first
+    b64 = os.environ.get(secret_name, "").strip()
+    if b64:
+        log.info(f"  📎 Resume from secret: {secret_name}")
+        b64 = re.sub(r'\s+', '', b64)
+        return base64.b64decode(b64)
+
+    # 2. Fallback to DEFAULT secret
+    b64 = os.environ.get("RESUME_DEFAULT_B64", "").strip()
+    if b64:
+        log.info(f"  📎 Resume from secret: RESUME_DEFAULT_B64 (fallback)")
+        b64 = re.sub(r'\s+', '', b64)
+        return base64.b64decode(b64)
+
+    # 3. Fallback to file in repo
+    fname = RESUME_FILES.get(secret_name, "resume_default.b64")
     if not Path(fname).exists():
-        log.warning(f"  ⚠️ {fname} not found → using {fallback}")
-        fname = fallback
-
+        fname = "resume_default.b64"
     if not Path(fname).exists():
         raise ValueError(
-            f"❌ Resume file '{fname}' not found in repo! "
-            "Make sure resume_default.b64 is committed to your repository."
+            f"❌ No resume found! Set GitHub Secret '{secret_name}' or "
+            "commit resume_default.b64 to your repository."
         )
 
-    log.info(f"  📎 Resume file: {fname}")
+    log.info(f"  📎 Resume from file: {fname}")
     b64 = Path(fname).read_text().strip()
-    b64 = re.sub(r'\s+', '', b64)  # strip any whitespace
+    b64 = re.sub(r'\s+', '', b64)
     return base64.b64decode(b64)
 
 # ─────────────────────────────────────────────
