@@ -34,6 +34,24 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────
+# SHARED EMAIL BODY (used by all roles)
+# ─────────────────────────────────────────────
+SHARED_REPLY = """Hi,
+
+I hope you're doing well. I'm writing to express my interest in any suitable opportunities that match my background and experience.
+
+I have several years of experience working in cloud, DevOps, and production support environments. My work has involved supporting live systems, automating deployments, improving monitoring and reliability, and collaborating closely with cross-functional teams to keep applications stable and performant.
+
+I've attached my resume for your review. I'd appreciate the opportunity to connect and discuss how my skills could be a good fit for your team.
+
+Thank you for your time and consideration.
+
+Best regards,
+Lingaraju Modhala
+Phone: +1 940 281 5324
+Email: rajumodhala777@gmail.com"""
+
+# ─────────────────────────────────────────────
 # ROLE CONFIG
 # ─────────────────────────────────────────────
 ROLES = [
@@ -46,15 +64,7 @@ ROLES = [
         ],
         "resume_secret": "RESUME_DEVOPS_B64",
         "cc_secret": "CC_DEVOPS",
-        "reply": """Dear Hiring Team,
-
-Thank you for reaching out regarding the {role} opportunity at {company}.
-
-I am very interested in this position. I have hands-on experience in DevOps practices including CI/CD pipeline setup, infrastructure automation using Terraform and Ansible, container orchestration with Kubernetes and Docker, and cloud platforms (AWS/GCP/Azure).
-
-Please find my resume attached for your review. I would love to discuss this opportunity further.
-
-Looking forward to hearing from you."""
+        "reply": SHARED_REPLY,
     },
     {
         "name": "Cloud Engineer",
@@ -64,15 +74,7 @@ Looking forward to hearing from you."""
         ],
         "resume_secret": "RESUME_CLOUD_B64",
         "cc_secret": "CC_CLOUD",
-        "reply": """Dear Hiring Team,
-
-Thank you for reaching out regarding the {role} opportunity at {company}.
-
-I am very interested in this position. I have strong hands-on experience in cloud platforms including AWS, Azure, and GCP. My expertise includes cloud infrastructure design, cost optimization, security best practices, and cloud-native services.
-
-Please find my resume attached for your review. I look forward to discussing how I can contribute to your team.
-
-Looking forward to hearing from you."""
+        "reply": SHARED_REPLY,
     },
     {
         "name": "Site Reliability Engineer",
@@ -82,35 +84,9 @@ Looking forward to hearing from you."""
         ],
         "resume_secret": "RESUME_SRE_B64",
         "cc_secret": "CC_SRE",
-        "reply": """Dear Hiring Team,
-
-Thank you for reaching out regarding the {role} opportunity at {company}.
-
-I am very interested in this position. I have strong experience in SRE practices including SLO/SLI/SLA management, incident response, chaos engineering, and building reliable distributed systems using Prometheus, Grafana, and ELK stack.
-
-Please find my resume attached for your review.
-
-Looking forward to hearing from you."""
+        "reply": SHARED_REPLY,
     },
-    {
-        "name": "SAP Consultant",
-        "keywords": [
-            "sap pp", "sap mm", "sap sd", "sap fico", "sap fi",
-            "sap co", "sap basis", "sap abap", "sap hana",
-            "sap ewm", "sap wm", "sap consultant", "sap analyst",
-        ],
-        "resume_secret": "RESUME_SAP_B64",
-        "cc_secret": "CC_SAP",
-        "reply": """Dear Hiring Team,
-
-Thank you for reaching out regarding the {role} opportunity at {company}.
-
-I am very interested in this position. I have extensive SAP consulting experience including implementation, configuration, and support across multiple SAP modules with end-to-end project lifecycle experience.
-
-Please find my resume attached for your review.
-
-Looking forward to hearing from you."""
-    },
+    
     {
         "name": "Platform Engineer",
         "keywords": [
@@ -120,15 +96,7 @@ Looking forward to hearing from you."""
         ],
         "resume_secret": "RESUME_PLATFORM_B64",
         "cc_secret": "CC_PLATFORM",
-        "reply": """Dear Hiring Team,
-
-Thank you for reaching out regarding the {role} opportunity at {company}.
-
-I am very interested in this position. I have solid experience in platform engineering including Kubernetes, Linux administration, networking, and infrastructure as code using Terraform and Ansible.
-
-Please find my resume attached for your review.
-
-Looking forward to hearing from you."""
+        "reply": SHARED_REPLY,
     },
 ]
 
@@ -136,15 +104,7 @@ DEFAULT_ROLE = {
     "name": "Default",
     "resume_secret": "RESUME_DEFAULT_B64",
     "cc_secret": "CC_DEFAULT",
-    "reply": """Dear Hiring Team,
-
-Thank you for reaching out regarding the {role} opportunity at {company}.
-
-I am very interested in this position and believe my experience aligns well with your requirements.
-
-Please find my resume attached for your review. I look forward to discussing this opportunity.
-
-Looking forward to hearing from you."""
+    "reply": SHARED_REPLY,
 }
 
 JOB_KEYWORDS = [
@@ -159,7 +119,7 @@ JOB_KEYWORDS = [
 STATE_FILE = "logs/processed_ids.json"
 
 # ─────────────────────────────────────────────
-# STATE  (persists within a run)
+# STATE
 # ─────────────────────────────────────────────
 def load_processed():
     if os.path.exists(STATE_FILE):
@@ -186,7 +146,7 @@ def fetch_unread_emails(your_email, app_password):
     log.info(f"📬 Found {len(ids)} unread emails")
 
     emails = []
-    seen_uids = set()  # dedupe within this fetch
+    seen_uids = set()
 
     for uid in ids[-100:]:
         uid_str = uid.decode()
@@ -199,7 +159,6 @@ def fetch_unread_emails(your_email, app_password):
             raw = msg_data[0][1]
             msg = emaillib.message_from_bytes(raw)
 
-            # Use Message-ID header as the stable dedup key
             message_id = msg.get("Message-ID", uid_str).strip()
 
             body = ""
@@ -248,14 +207,6 @@ def extract_address(s):
     m = re.search(r"<(.+?)>", s)
     return m.group(1) if m else s.strip()
 
-def extract_role_title(email):
-    text = email["subject"] + " " + email["body"][:300]
-    m = re.search(
-        r"([A-Z][a-z]+(?: [A-Z][a-z]+){1,4} (?:Engineer|Developer|Consultant|Analyst|Administrator|Lead|Manager))",
-        text
-    )
-    return m.group(1).strip() if m else "this position"
-
 def extract_company(email):
     addr = extract_address(email["sender"])
     domain = addr.split("@")[-1].split(".")[0].capitalize() if "@" in addr else ""
@@ -265,7 +216,7 @@ def extract_company(email):
     return "your organization"
 
 # ─────────────────────────────────────────────
-# GET RESUME FROM SECRET  ← FIXED
+# GET RESUME FROM SECRET
 # ─────────────────────────────────────────────
 def get_resume(role):
     b64 = os.environ.get(role["resume_secret"], "").strip()
@@ -277,9 +228,7 @@ def get_resume(role):
     if not b64:
         raise ValueError("No resume found! Add RESUME_DEFAULT_B64 to GitHub Secrets.")
 
-    # Validate it is proper base64 (ASCII only, correct padding)
     try:
-        # base64 strings must be ASCII — if this fails the secret is raw text
         b64.encode("ascii")
     except UnicodeEncodeError:
         raise ValueError(
@@ -295,14 +244,11 @@ def get_resume(role):
 # SEND EMAIL VIA SMTP
 # ─────────────────────────────────────────────
 def send_reply(email, role, your_name, your_email, app_password):
-    to_email   = extract_address(email["reply_to"] or email["sender"])
-    cc_email   = os.environ.get(role["cc_secret"], "")
-    role_title = extract_role_title(email)
-    company    = extract_company(email)
+    to_email  = extract_address(email["reply_to"] or email["sender"])
+    cc_email  = os.environ.get(role["cc_secret"], "")
 
     subject = f"Re: {email['subject']}" if not email["subject"].lower().startswith("re:") else email["subject"]
-    body    = role["reply"].format(role=role_title, company=company)
-    body   += f"\n\nBest regards,\n{your_name}"
+    body    = role["reply"]
 
     msg = MIMEMultipart()
     msg["From"]    = your_email
@@ -317,7 +263,7 @@ def send_reply(email, role, your_name, your_email, app_password):
     part = MIMEBase("application", "vnd.openxmlformats-officedocument.wordprocessingml.document")
     part.set_payload(resume_bytes)
     encoders.encode_base64(part)
-    fname = f"Resume_{your_name.replace(' ', '_')}.docx"
+    fname = "Resume_Lingaraju_Modhala.docx"
     part.add_header("Content-Disposition", f'attachment; filename="{fname}"')
     msg.attach(part)
 
@@ -371,7 +317,6 @@ def main():
 
     matched = 0
     for email in emails:
-        # ── DEDUP: use Message-ID (stable across runs) ──
         dedup_key = email["message_id"]
         if dedup_key in processed:
             log.info(f"  ⏭ Already processed: {email['subject'][:60]}")
