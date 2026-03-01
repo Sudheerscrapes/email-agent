@@ -86,7 +86,17 @@ ROLES = [
         "cc_secret": "CC_SRE",
         "reply": SHARED_REPLY,
     },
-    
+    {
+        "name": "SAP Consultant",
+        "keywords": [
+            "sap pp", "sap mm", "sap sd", "sap fico", "sap fi",
+            "sap co", "sap basis", "sap abap", "sap hana",
+            "sap ewm", "sap wm", "sap consultant", "sap analyst",
+        ],
+        "resume_secret": "RESUME_SAP_B64",
+        "cc_secret": "CC_SAP",
+        "reply": SHARED_REPLY,
+    },
     {
         "name": "Platform Engineer",
         "keywords": [
@@ -260,11 +270,12 @@ def send_reply(email, role, your_name, your_email, app_password):
     msg.attach(MIMEText(body, "plain"))
 
     resume_bytes = get_resume(role)
-    part = MIMEBase("application", "vnd.openxmlformats-officedocument.wordprocessingml.document")
+    part = MIMEBase("application", "octet-stream")
     part.set_payload(resume_bytes)
     encoders.encode_base64(part)
     fname = "Resume_Lingaraju_Modhala.docx"
     part.add_header("Content-Disposition", f'attachment; filename="{fname}"')
+    part.add_header("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document; name=\"Resume_Lingaraju_Modhala.docx\"")
     msg.attach(part)
 
     recipients = [to_email]
