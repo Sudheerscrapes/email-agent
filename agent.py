@@ -228,31 +228,35 @@ def extract_company(email):
 # ─────────────────────────────────────────────
 # GET RESUME FROM SECRET
 # ─────────────────────────────────────────────
+# Map secret name → b64 filename in repo
+RESUME_FILES = {
+    "RESUME_DEFAULT_B64":   "resume_default.b64",
+    "RESUME_DEVOPS_B64":    "resume_default.b64",
+    "RESUME_CLOUD_B64":     "resume_default.b64",
+    "RESUME_SRE_B64":       "resume_default.b64",
+    "RESUME_SAP_B64":       "resume_default.b64",
+    "RESUME_PLATFORM_B64":  "resume_default.b64",
+}
+
 def get_resume(role):
-    b64 = os.environ.get(role["resume_secret"], "")
+    # Try role-specific file first, then default
+    fname = RESUME_FILES.get(role["resume_secret"], "resume_default.b64")
+    fallback = "resume_default.b64"
 
-    if not b64:
-        log.warning(f"  ⚠️ {role['resume_secret']} not set → using default")
-        b64 = os.environ.get(DEFAULT_ROLE["resume_secret"], "")
+    # Try role-specific file
+    if not Path(fname).exists():
+        log.warning(f"  ⚠️ {fname} not found → using {fallback}")
+        fname = fallback
 
-    if not b64:
-        raise ValueError("No resume found! Add RESUME_DEFAULT_B64 to GitHub Secrets.")
-
-    # Strip ALL whitespace — GitHub secrets can add newlines/spaces
-    b64 = re.sub(r'\s+', '', b64)
-
-    try:
-        b64.encode("ascii")
-    except UnicodeEncodeError:
+    if not Path(fname).exists():
         raise ValueError(
-            f"❌ {role['resume_secret']} contains non-ASCII characters. "
-            "It must be a base64-encoded file, NOT raw text."
+            f"❌ Resume file '{fname}' not found in repo! "
+            "Make sure resume_default.b64 is committed to your repository."
         )
 
-    # Fix padding if needed
-    b64 += "=" * (4 - len(b64) % 4) if len(b64) % 4 else ""
-
-    log.info(f"  📎 Resume: {role['resume_secret']}")
+    log.info(f"  📎 Resume file: {fname}")
+    b64 = Path(fname).read_text().strip()
+    b64 = re.sub(r'\s+', '', b64)  # strip any whitespace
     return base64.b64decode(b64)
 
 # ─────────────────────────────────────────────
