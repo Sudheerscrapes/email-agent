@@ -35,12 +35,6 @@ log = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────
 # ROLE CONFIG
-# Add/remove roles as needed
-# Each role has:
-#   keywords      → detect in email
-#   resume_secret → GitHub Secret name for resume
-#   cc_secret     → GitHub Secret name for CC email
-#   reply         → your reply template
 # ─────────────────────────────────────────────
 ROLES = [
     {
@@ -138,7 +132,6 @@ Looking forward to hearing from you."""
     },
 ]
 
-# Fallback if no specific role matched
 DEFAULT_ROLE = {
     "name": "Default",
     "resume_secret": "RESUME_DEFAULT_B64",
@@ -154,7 +147,6 @@ Please find my resume attached for your review. I look forward to discussing thi
 Looking forward to hearing from you."""
 }
 
-# General job keywords — catches job emails
 JOB_KEYWORDS = [
     "hiring", "job opportunity", "urgent requirement", "requirement",
     "opening", "position", "vacancy", "recruitment", "looking for",
@@ -167,7 +159,7 @@ JOB_KEYWORDS = [
 STATE_FILE = "logs/processed_ids.json"
 
 # ─────────────────────────────────────────────
-# STATE
+# STATE  (persists within a run)
 # ─────────────────────────────────────────────
 def load_processed():
     if os.path.exists(STATE_FILE):
@@ -188,21 +180,28 @@ def fetch_unread_emails(your_email, app_password):
     mail.login(your_email, app_password)
     mail.select("inbox")
 
-    # Search unread emails
     today = datetime.now().strftime("%d-%b-%Y")
     _, msg_ids = mail.search(None, f'(UNSEEN SINCE "{today}")')
     ids = msg_ids[0].split()
     log.info(f"📬 Found {len(ids)} unread emails")
 
     emails = []
-    # Process latest 100 only to avoid timeout
+    seen_uids = set()  # dedupe within this fetch
+
     for uid in ids[-100:]:
+        uid_str = uid.decode()
+        if uid_str in seen_uids:
+            continue
+        seen_uids.add(uid_str)
+
         try:
             _, msg_data = mail.fetch(uid, "(RFC822)")
             raw = msg_data[0][1]
             msg = emaillib.message_from_bytes(raw)
 
-            # Get body
+            # Use Message-ID header as the stable dedup key
+            message_id = msg.get("Message-ID", uid_str).strip()
+
             body = ""
             if msg.is_multipart():
                 for part in msg.walk():
@@ -213,11 +212,12 @@ def fetch_unread_emails(your_email, app_password):
                 body = msg.get_payload(decode=True).decode("utf-8", errors="ignore")
 
             emails.append({
-                "uid":      uid.decode(),
-                "subject":  msg.get("Subject", ""),
-                "sender":   msg.get("From", ""),
-                "reply_to": msg.get("Reply-To", msg.get("From", "")),
-                "body":     body[:4000],
+                "uid":        uid_str,
+                "message_id": message_id,
+                "subject":    msg.get("Subject", ""),
+                "sender":     msg.get("From", ""),
+                "reply_to":   msg.get("Reply-To", msg.get("From", "")),
+                "body":       body[:4000],
             })
         except Exception as e:
             log.error(f"Error reading email {uid}: {e}")
@@ -265,15 +265,29 @@ def extract_company(email):
     return "your organization"
 
 # ─────────────────────────────────────────────
-# GET RESUME FROM SECRET
+# GET RESUME FROM SECRET  ← FIXED
 # ─────────────────────────────────────────────
 def get_resume(role):
-    b64 = os.environ.get(role["resume_secret"], "")
+    b64 = os.environ.get(role["resume_secret"], "").strip()
+
     if not b64:
         log.warning(f"  ⚠️ {role['resume_secret']} not set → using default")
-        b64 = os.environ.get(DEFAULT_ROLE["resume_secret"], "")
+        b64 = os.environ.get(DEFAULT_ROLE["resume_secret"], "").strip()
+
     if not b64:
         raise ValueError("No resume found! Add RESUME_DEFAULT_B64 to GitHub Secrets.")
+
+    # Validate it is proper base64 (ASCII only, correct padding)
+    try:
+        # base64 strings must be ASCII — if this fails the secret is raw text
+        b64.encode("ascii")
+    except UnicodeEncodeError:
+        raise ValueError(
+            f"❌ {role['resume_secret']} contains non-ASCII characters. "
+            "It must be a base64-encoded file, NOT raw text. "
+            "Run: base64 your_resume.docx | tr -d '\\n'  and paste that output as the secret."
+        )
+
     log.info(f"  📎 Resume: {role['resume_secret']}")
     return base64.b64decode(b64)
 
@@ -281,10 +295,10 @@ def get_resume(role):
 # SEND EMAIL VIA SMTP
 # ─────────────────────────────────────────────
 def send_reply(email, role, your_name, your_email, app_password):
-    to_email  = extract_address(email["reply_to"] or email["sender"])
-    cc_email  = os.environ.get(role["cc_secret"], "")
+    to_email   = extract_address(email["reply_to"] or email["sender"])
+    cc_email   = os.environ.get(role["cc_secret"], "")
     role_title = extract_role_title(email)
-    company   = extract_company(email)
+    company    = extract_company(email)
 
     subject = f"Re: {email['subject']}" if not email["subject"].lower().startswith("re:") else email["subject"]
     body    = role["reply"].format(role=role_title, company=company)
@@ -299,7 +313,6 @@ def send_reply(email, role, your_name, your_email, app_password):
 
     msg.attach(MIMEText(body, "plain"))
 
-    # Attach resume
     resume_bytes = get_resume(role)
     part = MIMEBase("application", "vnd.openxmlformats-officedocument.wordprocessingml.document")
     part.set_payload(resume_bytes)
@@ -308,7 +321,6 @@ def send_reply(email, role, your_name, your_email, app_password):
     part.add_header("Content-Disposition", f'attachment; filename="{fname}"')
     msg.attach(part)
 
-    # Send via Gmail SMTP
     recipients = [to_email]
     if cc_email:
         recipients.append(cc_email)
@@ -346,27 +358,26 @@ def main():
     your_email   = os.environ.get("YOUR_EMAIL", "")
     app_password = os.environ.get("GMAIL_APP_PASSWORD", "")
 
-    # Check required values
     missing = []
-    if not your_name:     missing.append("YOUR_NAME")
-    if not your_email:    missing.append("YOUR_EMAIL")
-    if not app_password:  missing.append("GMAIL_APP_PASSWORD")
+    if not your_name:    missing.append("YOUR_NAME")
+    if not your_email:   missing.append("YOUR_EMAIL")
+    if not app_password: missing.append("GMAIL_APP_PASSWORD")
     if missing:
         log.error(f"❌ Missing secrets: {', '.join(missing)}")
         return
 
     processed = load_processed()
-
-    # Fetch emails
     emails = fetch_unread_emails(your_email, app_password)
 
     matched = 0
     for email in emails:
-        uid = email["uid"]
-        if uid in processed:
+        # ── DEDUP: use Message-ID (stable across runs) ──
+        dedup_key = email["message_id"]
+        if dedup_key in processed:
+            log.info(f"  ⏭ Already processed: {email['subject'][:60]}")
             continue
 
-        processed.add(uid)
+        processed.add(dedup_key)
 
         if not is_job_email(email):
             continue
