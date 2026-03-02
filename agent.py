@@ -210,8 +210,8 @@ def detect_role(email):
         if any(kw in text for kw in role["keywords"]):
             log.info(f"  🎯 Matched: {role['name']}")
             return role
-    log.info("  🎯 No matching role keywords → Skipping")
-    return None
+    log.info("  🎯 No specific role → Default")
+    return DEFAULT_ROLE
 
 def extract_address(s):
     m = re.search(r"<(.+?)>", s)
@@ -228,35 +228,26 @@ def extract_company(email):
 # ─────────────────────────────────────────────
 # GET RESUME FROM SECRET
 # ─────────────────────────────────────────────
-# Map secret name → b64 filename in repo
-RESUME_FILES = {
-    "RESUME_DEFAULT_B64":   "resume_default.b64",
-    "RESUME_DEVOPS_B64":    "resume_default.b64",
-    "RESUME_CLOUD_B64":     "resume_default.b64",
-    "RESUME_SRE_B64":       "resume_default.b64",
-    "RESUME_SAP_B64":       "resume_default.b64",
-    "RESUME_PLATFORM_B64":  "resume_default.b64",
-}
-
 def get_resume(role):
-    # Try role-specific file first, then default
-    fname = RESUME_FILES.get(role["resume_secret"], "resume_default.b64")
-    fallback = "resume_default.b64"
+    b64 = os.environ.get(role["resume_secret"], "").strip()
 
-    # Try role-specific file
-    if not Path(fname).exists():
-        log.warning(f"  ⚠️ {fname} not found → using {fallback}")
-        fname = fallback
+    if not b64:
+        log.warning(f"  ⚠️ {role['resume_secret']} not set → using default")
+        b64 = os.environ.get(DEFAULT_ROLE["resume_secret"], "").strip()
 
-    if not Path(fname).exists():
+    if not b64:
+        raise ValueError("No resume found! Add RESUME_DEFAULT_B64 to GitHub Secrets.")
+
+    try:
+        b64.encode("ascii")
+    except UnicodeEncodeError:
         raise ValueError(
-            f"❌ Resume file '{fname}' not found in repo! "
-            "Make sure resume_default.b64 is committed to your repository."
+            f"❌ {role['resume_secret']} contains non-ASCII characters. "
+            "It must be a base64-encoded file, NOT raw text. "
+            "Run: base64 your_resume.docx | tr -d '\\n'  and paste that output as the secret."
         )
 
-    log.info(f"  📎 Resume file: {fname}")
-    b64 = Path(fname).read_text().strip()
-    b64 = re.sub(r'\s+', '', b64)  # strip any whitespace
+    log.info(f"  📎 Resume: {role['resume_secret']}")
     return base64.b64decode(b64)
 
 # ─────────────────────────────────────────────
@@ -279,7 +270,7 @@ def send_reply(email, role, your_name, your_email, app_password):
     msg.attach(MIMEText(body, "plain"))
 
     resume_bytes = get_resume(role)
-    part = MIMEBase("application", "octet-stream")
+    part = MIMEBase("application", "vnd.openxmlformats-officedocument.wordprocessingml.document")
     part.set_payload(resume_bytes)
     encoders.encode_base64(part)
     fname = "Resume_Lingaraju_Modhala.docx"
@@ -351,10 +342,7 @@ def main():
         matched += 1
 
         try:
- role = detect_role(email)
-            if role is None:
-                log.info("  ⏭ Skipping — no matching role keywords")
-                continue
+            role = detect_role(email)
             send_reply(email, role, your_name, your_email, app_password)
             log_sent(email, role)
         except Exception as e:
