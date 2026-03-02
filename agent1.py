@@ -175,7 +175,7 @@ def detect_role(email):
         if any(kw in text for kw in role["keywords"]):
             log.info(f"  🎯 Matched: {role['name']}")
             return role
-  log.info("  🎯 No matching role keywords → Skipping")
+    log.info("  No matching role keywords -> Skipping")
     return None
 
 def extract_address(s):
@@ -275,7 +275,7 @@ def log_sent(email, role):
 # ─────────────────────────────────────────────
 def main():
     log.info("=" * 55)
-    log.info("🤖 AI Email Agent — Swarna (FREE Gmail SMTP)")
+    log.info("AI Email Agent - Swarna (FREE Gmail SMTP)")
     log.info(f"⏰ {datetime.now().isoformat()}")
     log.info("=" * 55)
 
@@ -311,9 +311,9 @@ def main():
         matched += 1
 
         try:
-           role = detect_role(email)
+            role = detect_role(email)
             if role is None:
-                log.info("  ⏭ Skipping — no matching role keywords")
+                log.info("  Skipping - no matching role keywords")
                 continue
             send_reply(email, role, your_name, your_email, app_password)
             log_sent(email, role)
