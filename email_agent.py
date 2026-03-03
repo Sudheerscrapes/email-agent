@@ -114,7 +114,80 @@ def save_processed(ids):
 # ─────────────────────────────────────────────
 # READ EMAILS VIA IMAP
 # ─────────────────────────────────────────────
+def connect_imap(your_email, app_password):
+    mail = imaplib.IMAP4_SSL("imap.gmail.com")
+    mail.login(your_email, app_password)
+    mail.select("inbox")
+    return mail
+
 def fetch_unread_emails(your_email, app_password):
+    import time
+    log.info("📬 Connecting to Gmail via IMAP...")
+    mail = connect_imap(your_email, app_password)
+
+    today = datetime.now().strftime("%d-%b-%Y")
+    _, msg_ids = mail.search(None, f'(UNSEEN SINCE "{today}")')
+    ids = msg_ids[0].split()
+    log.info(f"📬 Found {len(ids)} unread emails today")
+
+    ids = ids[-50:]  # only process last 50
+    emails = []
+    seen_uids = set()
+
+    for i, uid in enumerate(ids):
+        uid_str = uid.decode()
+        if uid_str in seen_uids:
+            continue
+        seen_uids.add(uid_str)
+
+        # reconnect every 10 emails
+        if i > 0 and i % 10 == 0:
+            try:
+                mail.logout()
+            except Exception:
+                pass
+            log.info(f"  🔄 Reconnecting IMAP at email {i}...")
+            time.sleep(2)
+            mail = connect_imap(your_email, app_password)
+
+        try:
+            _, msg_data = mail.fetch(uid, "(RFC822)")
+            if not msg_data or msg_data[0] is None:
+                continue
+
+            raw = msg_data[0][1]
+            msg = emaillib.message_from_bytes(raw)
+            message_id = msg.get("Message-ID", uid_str).strip()
+
+            body = ""
+            if msg.is_multipart():
+                for part in msg.walk():
+                    if part.get_content_type() == "text/plain":
+                        body = part.get_payload(decode=True).decode("utf-8", errors="ignore")
+                        break
+            else:
+                body = msg.get_payload(decode=True).decode("utf-8", errors="ignore")
+
+            emails.append({
+                "uid":        uid_str,
+                "message_id": message_id,
+                "subject":    msg.get("Subject", ""),
+                "sender":     msg.get("From", ""),
+                "reply_to":   msg.get("Reply-To", msg.get("From", "")),
+                "body":       body[:4000],
+            })
+            time.sleep(0.3)  # small delay between fetches
+
+        except Exception as e:
+            log.error(f"Error reading email {uid_str}: {e}")
+            time.sleep(1)
+
+    try:
+        mail.logout()
+    except Exception:
+        pass
+
+    return emails
     log.info("📬 Connecting to Gmail via IMAP...")
     mail = imaplib.IMAP4_SSL("imap.gmail.com")
     mail.login(your_email, app_password)
