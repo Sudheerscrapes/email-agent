@@ -173,7 +173,6 @@ def fetch_unread_emails(your_email, app_password):
 
     return emails
 
-# ── subject line only — no false positives from body ──
 def is_job_email(email):
     subject = email["subject"].lower()
     return any(kw in subject for role in ROLES for kw in role["keywords"])
