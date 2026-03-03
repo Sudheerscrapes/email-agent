@@ -1,8 +1,8 @@
 """
 AI Email Agent - 100% FREE
 Uses Gmail SMTP (App Password) - No Google Cloud, No Credit Card
-Detects job roles, sends correct resume, CC correct person
 Only replies to: DevOps, Cloud Engineer, Site Reliability Engineer
+Matches subject line only - no false positives
 """
 
 import os
@@ -11,6 +11,7 @@ import base64
 import logging
 import re
 import smtplib
+import time
 from pathlib import Path
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
@@ -20,9 +21,6 @@ from email import encoders
 import imaplib
 import email as emaillib
 
-# ─────────────────────────────────────────────
-# LOGGING
-# ─────────────────────────────────────────────
 Path("logs").mkdir(exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
@@ -34,9 +32,6 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-# ─────────────────────────────────────────────
-# SHARED EMAIL BODY (used by all roles)
-# ─────────────────────────────────────────────
 SHARED_REPLY = """Hi,
 
 I hope you're doing well. I'm writing to express my interest in any suitable opportunities that match my background and experience.
@@ -52,9 +47,6 @@ Lingaraju Modhala
 Phone: +1 940 281 5324
 Email: rajumodhala777@gmail.com"""
 
-# ─────────────────────────────────────────────
-# ROLES — only these 3 trigger a reply
-# ─────────────────────────────────────────────
 ROLES = [
     {
         "name": "DevOps Engineer",
@@ -98,9 +90,6 @@ DEFAULT_ROLE = {
 
 STATE_FILE = "logs/processed_ids.json"
 
-# ─────────────────────────────────────────────
-# STATE
-# ─────────────────────────────────────────────
 def load_processed():
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE) as f:
@@ -111,9 +100,6 @@ def save_processed(ids):
     with open(STATE_FILE, "w") as f:
         json.dump(list(ids), f)
 
-# ─────────────────────────────────────────────
-# READ EMAILS VIA IMAP
-# ─────────────────────────────────────────────
 def connect_imap(your_email, app_password):
     mail = imaplib.IMAP4_SSL("imap.gmail.com")
     mail.login(your_email, app_password)
@@ -121,7 +107,6 @@ def connect_imap(your_email, app_password):
     return mail
 
 def fetch_unread_emails(your_email, app_password):
-    import time
     log.info("📬 Connecting to Gmail via IMAP...")
     mail = connect_imap(your_email, app_password)
 
@@ -130,7 +115,7 @@ def fetch_unread_emails(your_email, app_password):
     ids = msg_ids[0].split()
     log.info(f"📬 Found {len(ids)} unread emails today")
 
-    ids = ids[-50:]  # only process last 50
+    ids = ids[-50:]
     emails = []
     seen_uids = set()
 
@@ -140,7 +125,6 @@ def fetch_unread_emails(your_email, app_password):
             continue
         seen_uids.add(uid_str)
 
-        # reconnect every 10 emails
         if i > 0 and i % 10 == 0:
             try:
                 mail.logout()
@@ -176,7 +160,7 @@ def fetch_unread_emails(your_email, app_password):
                 "reply_to":   msg.get("Reply-To", msg.get("From", "")),
                 "body":       body[:4000],
             })
-            time.sleep(0.3)  # small delay between fetches
+            time.sleep(0.3)
 
         except Exception as e:
             log.error(f"Error reading email {uid_str}: {e}")
@@ -188,70 +172,16 @@ def fetch_unread_emails(your_email, app_password):
         pass
 
     return emails
-    log.info("📬 Connecting to Gmail via IMAP...")
-    mail = imaplib.IMAP4_SSL("imap.gmail.com")
-    mail.login(your_email, app_password)
-    mail.select("inbox")
 
-    today = datetime.now().strftime("%d-%b-%Y")
-    _, msg_ids = mail.search(None, f'(UNSEEN SINCE "{today}")')
-    ids = msg_ids[0].split()
-    log.info(f"📬 Found {len(ids)} unread emails")
-
-    emails = []
-    seen_uids = set()
-
-    for uid in ids[-100:]:
-        uid_str = uid.decode()
-        if uid_str in seen_uids:
-            continue
-        seen_uids.add(uid_str)
-
-        try:
-            _, msg_data = mail.fetch(uid, "(RFC822)")
-            raw = msg_data[0][1]
-            msg = emaillib.message_from_bytes(raw)
-
-            message_id = msg.get("Message-ID", uid_str).strip()
-
-            body = ""
-            if msg.is_multipart():
-                for part in msg.walk():
-                    if part.get_content_type() == "text/plain":
-                        body = part.get_payload(decode=True).decode("utf-8", errors="ignore")
-                        break
-            else:
-                body = msg.get_payload(decode=True).decode("utf-8", errors="ignore")
-
-            emails.append({
-                "uid":        uid_str,
-                "message_id": message_id,
-                "subject":    msg.get("Subject", ""),
-                "sender":     msg.get("From", ""),
-                "reply_to":   msg.get("Reply-To", msg.get("From", "")),
-                "body":       body[:4000],
-            })
-        except Exception as e:
-            log.error(f"Error reading email {uid}: {e}")
-
-    mail.logout()
-    return emails
-
-# ─────────────────────────────────────────────
-# DETECTION — only role keywords trigger a reply
-# ─────────────────────────────────────────────
+# ── subject line only — no false positives from body ──
 def is_job_email(email):
-    text = (email["subject"] + " " + email["body"]).lower()
-    return any(
-        kw in text
-        for role in ROLES
-        for kw in role["keywords"]
-    )
+    subject = email["subject"].lower()
+    return any(kw in subject for role in ROLES for kw in role["keywords"])
 
 def detect_role(email):
-    text = (email["subject"] + " " + email["body"]).lower()
+    subject = email["subject"].lower()
     for role in ROLES:
-        if any(kw in text for kw in role["keywords"]):
+        if any(kw in subject for kw in role["keywords"]):
             log.info(f"  🎯 Matched: {role['name']}")
             return role
     log.info("  🎯 No specific role → Default")
@@ -261,48 +191,24 @@ def extract_address(s):
     m = re.search(r"<(.+?)>", s)
     return m.group(1) if m else s.strip()
 
-def extract_company(email):
-    addr = extract_address(email["sender"])
-    domain = addr.split("@")[-1].split(".")[0].capitalize() if "@" in addr else ""
-    generic = ["gmail", "yahoo", "hotmail", "outlook", "rediffmail", "naukri"]
-    if domain.lower() not in generic and domain:
-        return domain
-    return "your organization"
-
-# ─────────────────────────────────────────────
-# GET RESUME FROM SECRET
-# ─────────────────────────────────────────────
 def get_resume(role):
     b64 = os.environ.get(role["resume_secret"], "").strip()
-
     if not b64:
         log.warning(f"  ⚠️ {role['resume_secret']} not set → using default")
         b64 = os.environ.get(DEFAULT_ROLE["resume_secret"], "").strip()
-
     if not b64:
         raise ValueError("No resume found! Add RESUME_DEFAULT_B64 to GitHub Secrets.")
-
     try:
         b64.encode("ascii")
     except UnicodeEncodeError:
-        raise ValueError(
-            f"❌ {role['resume_secret']} contains non-ASCII characters. "
-            "It must be a base64-encoded file, NOT raw text. "
-            "Run: base64 your_resume.docx | tr -d '\\n'  and paste that output as the secret."
-        )
-
+        raise ValueError(f"{role['resume_secret']} must be base64-encoded.")
     log.info(f"  📎 Resume: {role['resume_secret']}")
     return base64.b64decode(b64)
 
-# ─────────────────────────────────────────────
-# SEND EMAIL VIA SMTP
-# ─────────────────────────────────────────────
 def send_reply(email, role, your_name, your_email, app_password):
-    to_email  = extract_address(email["reply_to"] or email["sender"])
-    cc_email  = os.environ.get(role["cc_secret"], "")
-
-    subject = f"Re: {email['subject']}" if not email["subject"].lower().startswith("re:") else email["subject"]
-    body    = role["reply"]
+    to_email = extract_address(email["reply_to"] or email["sender"])
+    cc_email = os.environ.get(role["cc_secret"], "")
+    subject  = f"Re: {email['subject']}" if not email["subject"].lower().startswith("re:") else email["subject"]
 
     msg = MIMEMultipart()
     msg["From"]    = your_email
@@ -311,14 +217,13 @@ def send_reply(email, role, your_name, your_email, app_password):
     if cc_email:
         msg["Cc"] = cc_email
 
-    msg.attach(MIMEText(body, "plain"))
+    msg.attach(MIMEText(role["reply"], "plain"))
 
     resume_bytes = get_resume(role)
     part = MIMEBase("application", "vnd.openxmlformats-officedocument.wordprocessingml.document")
     part.set_payload(resume_bytes)
     encoders.encode_base64(part)
-    fname = "Resume_Lingaraju_Modhala.docx"
-    part.add_header("Content-Disposition", f'attachment; filename="{fname}"')
+    part.add_header("Content-Disposition", 'attachment; filename="Resume_Lingaraju_Modhala.docx"')
     msg.attach(part)
 
     recipients = [to_email]
@@ -333,9 +238,6 @@ def send_reply(email, role, your_name, your_email, app_password):
     if cc_email:
         log.info(f"  📋 CC'd:    {cc_email}")
 
-# ─────────────────────────────────────────────
-# LOG
-# ─────────────────────────────────────────────
 def log_sent(email, role):
     csv_path = "logs/sent_log.csv"
     is_new   = not os.path.exists(csv_path)
@@ -345,9 +247,6 @@ def log_sent(email, role):
         cc = os.environ.get(role["cc_secret"], "none")
         f.write(f'{datetime.now().isoformat()},"{role["name"]}","{email["sender"]}","{email["subject"]}","{cc}"\n')
 
-# ─────────────────────────────────────────────
-# MAIN
-# ─────────────────────────────────────────────
 def main():
     log.info("=" * 55)
     log.info("🤖 AI Email Agent — FREE (Gmail SMTP)")
