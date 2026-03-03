@@ -34,7 +34,7 @@ jobs:
           CC_DEVOPS:           ${{ secrets.CC_DEVOPS }}
           
           CC_DEFAULT:          ${{ secrets.CC_DEFAULT }}
-        run: python agent.py
+      run: python email_agent.py
 
       - name: Upload logs
         if: always()
