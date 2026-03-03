@@ -70,6 +70,13 @@ ROLES = [
 
 REPLIED_LABEL = "AutoReplied"
 
+# domains to skip
+SKIP_SENDERS = [
+    "noreply.github.com",
+    "notifications@github.com",
+    "github.com",
+]
+
 def connect_imap(your_email, app_password):
     mail = imaplib.IMAP4_SSL("imap.gmail.com")
     mail.login(your_email, app_password)
@@ -101,11 +108,19 @@ def get_replied_message_ids(mail):
     mail.select("inbox")
     return replied_ids
 
-def mark_as_replied(mail, uid):
+def mark_as_replied(mail, uid, your_email, app_password):
     try:
+        mail.select("inbox")
         mail.copy(uid, REPLIED_LABEL)
-    except Exception as e:
-        log.warning(f"  Could not mark as replied: {e}")
+    except Exception:
+        try:
+            time.sleep(2)
+            mail = connect_imap(your_email, app_password)
+            mail.select("inbox")
+            mail.copy(uid, REPLIED_LABEL)
+        except Exception as e:
+            log.warning(f"  Could not mark as replied: {e}")
+    return mail
 
 def fetch_todays_matching_emails(your_email, app_password):
     log.info("Connecting to Gmail via IMAP...")
@@ -161,6 +176,12 @@ def fetch_todays_matching_emails(your_email, app_password):
 
             if message_id in replied_ids:
                 log.info(f"  Already replied: {msg.get('Subject', '')[:60]}")
+                continue
+
+            # skip GitHub notification emails
+            sender = msg.get("From", "")
+            if any(skip in sender for skip in SKIP_SENDERS):
+                log.info(f"  Skipping GitHub notification: {msg.get('Subject', '')[:60]}")
                 continue
 
             body = ""
@@ -289,7 +310,7 @@ def main():
             role = detect_role(email)
             send_reply(email, role, your_email, app_password)
             log_sent(email, role)
-            mark_as_replied(mail, email["uid"])
+            mail = mark_as_replied(mail, email["uid"], your_email, app_password)
         except Exception as e:
             log.error(f"Error: {e}", exc_info=True)
 
