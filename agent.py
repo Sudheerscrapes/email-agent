@@ -1,7 +1,7 @@
 """
 AI Email Agent - Lingaraju Modhala
 Only replies to: DevOps, Cloud Engineer, SRE
-Searches Gmail by keyword in subject - no date limit
+Searches Gmail by keyword in subject - today only
 """
 
 import os, base64, logging, re, smtplib, time
@@ -121,19 +121,21 @@ def fetch_matching_emails(your_email, app_password):
     replied_ids = get_replied_message_ids(mail)
     log.info(f"Already replied to {len(replied_ids)} emails previously")
 
-    # Search IMAP directly by keyword — only fetch matching emails
+    today = datetime.now().strftime("%d-%b-%Y")
+
+    # Search IMAP directly by keyword — today only
     all_uid_set = set()
     for role in ROLES:
         for kw in role["keywords"]:
             try:
-                _, msg_ids = mail.search(None, f'(UNSEEN SUBJECT "{kw}")')
+                _, msg_ids = mail.search(None, f'(UNSEEN SINCE "{today}" SUBJECT "{kw}")')
                 for uid in msg_ids[0].split():
                     all_uid_set.add(uid)
             except Exception:
                 pass
 
     ids = list(all_uid_set)
-    log.info(f"Found {len(ids)} matching unread emails")
+    log.info(f"Found {len(ids)} matching unread emails today")
 
     emails, seen_uids = [], set()
     for i, uid in enumerate(ids):
