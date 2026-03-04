@@ -259,9 +259,15 @@ class EmailAgent:
 
     @staticmethod
     def load_resume() -> bytes:
+        # 1. Try environment variable first (GitHub Actions)
+        b64_env = os.environ.get("RESUME_DATA_ENGINEER_B64", "")
+        if b64_env.strip():
+            log.info("  Resume: loaded from env variable")
+            return base64.b64decode(re.sub(r'\s+', '', b64_env.strip()))
+        # 2. Fallback to file (local)
         path = Path(RESUME_FILE)
         if not path.exists():
-            raise FileNotFoundError(f"Resume file '{RESUME_FILE}' not found!")
+            raise FileNotFoundError(f"Resume not found: set RESUME_DATA_ENGINEER_B64 env or place '{RESUME_FILE}' in folder")
         log.info(f"  Resume: {RESUME_FILE}")
         raw = path.read_bytes()
         if raw[:2] in (b'\xff\xfe', b'\xfe\xff'):
