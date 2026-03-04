@@ -1,8 +1,8 @@
 name: AI Email Agent - Swarna (Data Engineer)
 on:
   schedule:
-    - cron: '*/10 * * * *'   # every 10 minutes
-  workflow_dispatch:           # manual trigger anytime
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
 jobs:
   run-agent:
     runs-on: ubuntu-latest
@@ -10,26 +10,16 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Write Swarna resume file
-        run: echo "${{ secrets.RESUME_DATA_ENGINEER_B64 }}" > resume_de_b64.txt
-
       - name: Run Email Agent - Swarna
         env:
-          YOUR_EMAIL:         ${{ secrets.YOUR_EMAIL }}
+          YOUR_EMAIL: ${{ secrets.YOUR_EMAIL }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          CC_DATA:            ${{ secrets.CC_DATA_ENGINEER }}
+          CC_DATA_ENGINEER: ${{ secrets.CC_DATA_ENGINEER }}
         run: python agent1.py
-
       - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v4
