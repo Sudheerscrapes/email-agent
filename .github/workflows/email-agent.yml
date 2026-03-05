@@ -1,7 +1,10 @@
 name: AI Email Agent
+
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    # Runs every 15 min between 6:30 PM - 4:30 AM IST (13:00 - 23:00 UTC)
+    - cron: '*/15 13-22 * * *'   # 6:30 PM to 4:29 AM IST
+    - cron: '0,15,30 23 * * *'   # 4:30 AM IST cutoff (last 3 runs)
   workflow_dispatch:
 
 jobs:
