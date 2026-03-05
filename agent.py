@@ -6,18 +6,30 @@ Searches Gmail by keyword in subject - today only
 
 import os, base64, logging, re, smtplib, time
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, time as dtime
+import imaplib
+import email as emaillib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
-import imaplib
-import email as emaillib
+import pytz
 
 Path("logs").mkdir(exist_ok=True)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[logging.FileHandler("logs/agent.log"), logging.StreamHandler()])
 log = logging.getLogger(__name__)
+
+# ── TIME WINDOW CHECK (IST 6:30 PM → 4:30 AM) ───────────────────────────────
+def is_within_run_window():
+    ist = pytz.timezone("Asia/Kolkata")
+    now = datetime.now(ist)
+    current_time = now.time()
+    start = dtime(18, 30)  # 6:30 PM IST
+    end   = dtime(4, 30)   # 4:30 AM IST
+    # Window crosses midnight: >= 18:30 OR <= 04:30
+    return current_time >= start or current_time <= end
+# ─────────────────────────────────────────────────────────────────────────────
 
 SHARED_REPLY = """Hi,
 
@@ -71,7 +83,7 @@ ROLES = [
 ]
 
 REPLIED_LABEL = "AutoReplied"
-SKIP_SENDERS = ["noreply@", "mailer-daemon@", "notifications@github.com", "noreply.github.com"]
+SKIP_SENDERS  = ["noreply@", "mailer-daemon@", "notifications@github.com", "noreply.github.com"]
 
 def connect_imap(your_email, app_password):
     mail = imaplib.IMAP4_SSL("imap.gmail.com")
@@ -123,7 +135,6 @@ def fetch_matching_emails(your_email, app_password):
 
     today = datetime.now().strftime("%d-%b-%Y")
 
-    # Search IMAP directly by keyword — today only
     all_uid_set = set()
     for role in ROLES:
         for kw in role["keywords"]:
@@ -151,7 +162,6 @@ def fetch_matching_emails(your_email, app_password):
             mail = connect_imap(your_email, app_password)
 
         try:
-            # BODY.PEEK — does not mark email as read
             _, hdr_data = mail.fetch(uid, "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT MESSAGE-ID REPLY-TO)])")
             if not hdr_data or hdr_data[0] is None: continue
             hdr_raw = hdr_data[0][1].decode("utf-8", errors="ignore")
@@ -176,7 +186,6 @@ def fetch_matching_emails(your_email, app_password):
             rt_match = re.search(r"Reply-To:\s*(.+?)(?:\r?\n(?!\s)|\Z)", hdr_raw, re.IGNORECASE | re.DOTALL)
             reply_to = rt_match.group(1).strip() if rt_match else sender
 
-            # BODY.PEEK[] — does not mark email as read
             _, msg_data = mail.fetch(uid, "(BODY.PEEK[])")
             if not msg_data or msg_data[0] is None: continue
             msg = emaillib.message_from_bytes(msg_data[0][1])
@@ -265,18 +274,28 @@ def main():
     log.info("AI Email Agent - Lingaraju (FREE Gmail SMTP)")
     log.info(f"Time: {datetime.now().isoformat()}")
     log.info("=" * 55)
-    your_email = os.environ.get("YOUR_EMAIL", "")
+
+    # ── TIME WINDOW CHECK ────────────────────────────────────────────────────
+    if not is_within_run_window():
+        log.info("⏰ Outside run window (6:30 PM - 4:30 AM IST). Skipping.")
+        return
+    log.info("✅ Within run window (6:30 PM - 4:30 AM IST). Proceeding...")
+    # ─────────────────────────────────────────────────────────────────────────
+
+    your_email   = os.environ.get("YOUR_EMAIL", "")
     app_password = os.environ.get("GMAIL_APP_PASSWORD", "")
     missing = []
-    if not your_email: missing.append("YOUR_EMAIL")
+    if not your_email:   missing.append("YOUR_EMAIL")
     if not app_password: missing.append("GMAIL_APP_PASSWORD")
     if missing:
         log.error(f"Missing secrets: {', '.join(missing)}")
         return
+
     emails, mail = fetch_matching_emails(your_email, app_password)
     matched = 0
-    sent_ids = set()    # dedupe by message_id
-    sent_senders = set()  # dedupe by sender email — one reply per sender per run
+    sent_ids     = set()
+    sent_senders = set()
+
     for email in emails:
         log.info(f"\nJOB EMAIL: {email['subject']}")
         log.info(f"   From: {email['sender']}")
@@ -300,6 +319,7 @@ def main():
             sent_senders.add(sender_addr)
         except Exception as e:
             log.error(f"Error: {e}", exc_info=True)
+
     try: mail.logout()
     except Exception: pass
     log.info(f"\nDone - Replied to {matched} job emails")
