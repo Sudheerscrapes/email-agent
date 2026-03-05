@@ -275,13 +275,18 @@ def main():
         return
     emails, mail = fetch_matching_emails(your_email, app_password)
     matched = 0
-    sent_ids = set()  # prevent duplicate sends in same run
+    sent_ids = set()    # dedupe by message_id
+    sent_senders = set()  # dedupe by sender email — one reply per sender per run
     for email in emails:
         log.info(f"\nJOB EMAIL: {email['subject']}")
         log.info(f"   From: {email['sender']}")
         try:
             if email["message_id"] in sent_ids:
-                log.info("  Duplicate in this run — skipping")
+                log.info("  Duplicate message_id in this run — skipping")
+                continue
+            sender_addr = extract_address(email["reply_to"] or email["sender"])
+            if sender_addr in sent_senders:
+                log.info(f"  Already replied to {sender_addr} this run — skipping")
                 continue
             role = detect_role(email)
             if role is None:
@@ -292,6 +297,7 @@ def main():
             log_sent(email, role)
             mail = mark_as_replied(mail, email["uid"], your_email, app_password)
             sent_ids.add(email["message_id"])
+            sent_senders.add(sender_addr)
         except Exception as e:
             log.error(f"Error: {e}", exc_info=True)
     try: mail.logout()
