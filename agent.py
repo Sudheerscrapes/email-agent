@@ -1,10 +1,10 @@
 """
 AI Email Agent - Lingaraju Modhala
 Only replies to: DevOps, Cloud Engineer, SRE
-Searches Gmail by keyword in subject - today only
+FIX: Persistent dedup — never replies twice to same sender, ever.
 """
 
-import os, base64, logging, re, smtplib, time
+import os, base64, logging, re, smtplib, time, json
 from pathlib import Path
 from datetime import datetime, time as dtime
 import imaplib
@@ -20,6 +20,33 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
     handlers=[logging.FileHandler("logs/agent.log"), logging.StreamHandler()])
 log = logging.getLogger(__name__)
 
+# ── PERSISTENT DEDUP FILE ────────────────────────────────────────────────────
+DEDUP_FILE = "logs/replied_senders.json"
+
+def load_replied_senders():
+    """Load the persistent set of senders we've already replied to."""
+    if Path(DEDUP_FILE).exists():
+        try:
+            with open(DEDUP_FILE, "r") as f:
+                data = json.load(f)
+                log.info(f"Loaded {len(data)} previously replied senders from disk")
+                return set(data)
+        except Exception as e:
+            log.warning(f"Could not load dedup file: {e}")
+    return set()
+
+def save_replied_sender(sender_email: str):
+    """Persist a sender email so we never reply to them again."""
+    existing = load_replied_senders()
+    existing.add(sender_email.lower().strip())
+    try:
+        with open(DEDUP_FILE, "w") as f:
+            json.dump(list(existing), f, indent=2)
+        log.info(f"  Saved sender to dedup list: {sender_email}")
+    except Exception as e:
+        log.error(f"  Could not save dedup file: {e}")
+# ─────────────────────────────────────────────────────────────────────────────
+
 # ── TIME WINDOW CHECK (IST 6:30 PM → 4:30 AM) ───────────────────────────────
 def is_within_run_window():
     ist = pytz.timezone("Asia/Kolkata")
@@ -27,7 +54,6 @@ def is_within_run_window():
     current_time = now.time()
     start = dtime(18, 30)  # 6:30 PM IST
     end   = dtime(4, 30)   # 4:30 AM IST
-    # Window crosses midnight: >= 18:30 OR <= 04:30
     return current_time >= start or current_time <= end
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -96,6 +122,7 @@ def ensure_label_exists(mail):
     except Exception: pass
 
 def get_replied_message_ids(mail):
+    """Get Message-IDs from AutoReplied Gmail label (per-message dedup)."""
     replied_ids = set()
     try:
         mail.select(REPLIED_LABEL)
@@ -131,7 +158,11 @@ def fetch_matching_emails(your_email, app_password):
     mail = connect_imap(your_email, app_password)
     ensure_label_exists(mail)
     replied_ids = get_replied_message_ids(mail)
-    log.info(f"Already replied to {len(replied_ids)} emails previously")
+    log.info(f"Already replied to {len(replied_ids)} emails previously (by Message-ID)")
+
+    # ── LOAD PERSISTENT SENDER DEDUP ────────────────────────────────────────
+    replied_senders = load_replied_senders()
+    # ────────────────────────────────────────────────────────────────────────
 
     today = datetime.now().strftime("%d-%b-%Y")
 
@@ -173,18 +204,25 @@ def fetch_matching_emails(your_email, app_password):
             message_id = mid_match.group(1).strip() if mid_match else uid_str
 
             if message_id in replied_ids:
-                log.info(f"  Already replied: {subject[:60]}")
+                log.info(f"  Already replied (Message-ID): {subject[:60]}")
                 continue
 
             sender_match = re.search(r"From:\s*(.+?)(?:\r?\n(?!\s)|\Z)", hdr_raw, re.IGNORECASE | re.DOTALL)
             sender = sender_match.group(1).strip() if sender_match else ""
 
             if any(skip in sender.lower() for skip in SKIP_SENDERS):
-                log.info(f"  Skipping: {subject[:60]}")
+                log.info(f"  Skipping system sender: {subject[:60]}")
                 continue
 
             rt_match = re.search(r"Reply-To:\s*(.+?)(?:\r?\n(?!\s)|\Z)", hdr_raw, re.IGNORECASE | re.DOTALL)
             reply_to = rt_match.group(1).strip() if rt_match else sender
+
+            # ── PERSISTENT SENDER CHECK ──────────────────────────────────
+            sender_addr = extract_address(reply_to or sender).lower().strip()
+            if sender_addr in replied_senders:
+                log.info(f"  Already replied to sender {sender_addr} (persistent dedup) — skipping: {subject[:60]}")
+                continue
+            # ─────────────────────────────────────────────────────────────
 
             _, msg_data = mail.fetch(uid, "(BODY.PEEK[])")
             if not msg_data or msg_data[0] is None: continue
@@ -201,7 +239,8 @@ def fetch_matching_emails(your_email, app_password):
             emails.append({
                 "uid": uid_str, "message_id": message_id,
                 "subject": subject, "sender": sender,
-                "reply_to": reply_to, "body": body[:4000]
+                "reply_to": reply_to, "body": body[:4000],
+                "sender_addr": sender_addr  # pre-extracted for dedup
             })
             log.info(f"  Queued: {subject[:60]}")
             time.sleep(0.2)
@@ -275,12 +314,10 @@ def main():
     log.info(f"Time: {datetime.now().isoformat()}")
     log.info("=" * 55)
 
-    # ── TIME WINDOW CHECK ────────────────────────────────────────────────────
     if not is_within_run_window():
         log.info("⏰ Outside run window (6:30 PM - 4:30 AM IST). Skipping.")
         return
     log.info("✅ Within run window (6:30 PM - 4:30 AM IST). Proceeding...")
-    # ─────────────────────────────────────────────────────────────────────────
 
     your_email   = os.environ.get("YOUR_EMAIL", "")
     app_password = os.environ.get("GMAIL_APP_PASSWORD", "")
@@ -292,31 +329,45 @@ def main():
         return
 
     emails, mail = fetch_matching_emails(your_email, app_password)
-    matched = 0
-    sent_ids     = set()
-    sent_senders = set()
 
+    # ── IN-RUN DEDUP (on top of persistent dedup) ────────────────────────────
+    sent_ids     = set()  # Message-IDs replied this run
+    sent_senders = set()  # Sender emails replied this run
+    # ────────────────────────────────────────────────────────────────────────
+
+    matched = 0
     for email in emails:
         log.info(f"\nJOB EMAIL: {email['subject']}")
         log.info(f"   From: {email['sender']}")
         try:
+            # In-run Message-ID dedup
             if email["message_id"] in sent_ids:
                 log.info("  Duplicate message_id in this run — skipping")
                 continue
-            sender_addr = extract_address(email["reply_to"] or email["sender"])
+
+            # In-run sender dedup
+            sender_addr = email.get("sender_addr") or extract_address(email["reply_to"] or email["sender"]).lower()
             if sender_addr in sent_senders:
                 log.info(f"  Already replied to {sender_addr} this run — skipping")
                 continue
+
             role = detect_role(email)
             if role is None:
                 log.info("  No matching role — skipping")
                 continue
+
             matched += 1
             send_reply(email, role, your_email, app_password)
             log_sent(email, role)
             mail = mark_as_replied(mail, email["uid"], your_email, app_password)
+
+            # ── SAVE TO PERSISTENT DEDUP IMMEDIATELY AFTER SENDING ───────
+            save_replied_sender(sender_addr)
+            # ─────────────────────────────────────────────────────────────
+
             sent_ids.add(email["message_id"])
             sent_senders.add(sender_addr)
+
         except Exception as e:
             log.error(f"Error: {e}", exc_info=True)
 
