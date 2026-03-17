@@ -1,6 +1,6 @@
 """
-AI Email Agent - Malathi Gambiraopet
-Only replies to: Data Analyst roles (Delaware or Remote only)
+AI Email Agent - Naveen
+Only replies to: SAP SD / OTC roles
 Searches Gmail by keyword in subject - today only
 """
 
@@ -26,7 +26,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler("logs/agent2.log"),
+        logging.FileHandler("logs/agent_naveen.log"),
         logging.StreamHandler()
     ]
 )
@@ -45,65 +45,91 @@ def is_within_run_window():
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 REPLIED_LABEL = "AutoReplied"
-RESUME_FILE   = "resume_data_analyst_b64.txt"
-RESUME_NAME   = "Resume_Malathi_Gambiraopet.docx"
+RESUME_FILE   = "resume_naveen_sap_sd_b64.txt"
+RESUME_NAME   = "Resume_Naveen_SAP_SD.docx"
 SKIP_SENDERS  = ["noreply@", "mailer-daemon@", "notifications@github.com", "noreply.github.com"]
 
-# ── Location Filter ────────────────────────────────────────────────────────────
-ALLOWED_LOCATIONS = ["delaware", "remote", "de,", " de ", "(de)"]
+# ── Role Blocklist — skip emails mentioning these roles even if SAP SD keyword matches ──
+BLOCKED_ROLES = [
+    "project manager", "program manager", "product manager",
+    "sap manager", "engagement manager", "delivery manager",
+    "account manager", "practice manager", "service manager",
+    "scrum master", "agile coach",
+    "sap director", "director of sap",
+    "sap architect", "solution architect", "enterprise architect",
+    "sap abap", "abap developer", "abap consultant",
+    "sap basis", "basis consultant", "basis administrator",
+    "sap fico", "sap fi consultant", "sap co consultant",
+    "sap mm consultant", "sap wm consultant", "sap pp consultant",
+    "sap hcm", "sap hr consultant", "sap successfactors",
+    "sap crm", "sap ariba", "sap mdg",
+    "sap technical", "sap developer",
+]
 
-def is_allowed_location(subject: str, body: str) -> bool:
-    combined = (subject + " " + body).lower()
-    return any(loc in combined for loc in ALLOWED_LOCATIONS)
+def is_blocked_role(subject: str) -> bool:
+    subject_lower = subject.lower()
+    return any(blocked in subject_lower for blocked in BLOCKED_ROLES)
 
 REPLY_BODY = """Hi,
 
-I hope you're doing well. I'm writing to express my interest in the Data Analyst opportunity.
+I hope you're doing well. I'm writing to express my interest in the SAP SD opportunity.
 
-I am a results-driven Senior Data Analyst with 8+ years of experience transforming raw data into actionable insights, specializing in financial reporting, business intelligence, and data visualization. I have expertise in SQL, Python (Pandas, NumPy), R, Tableau, Power BI, and cloud platforms including AWS (Redshift, S3, Athena) and GCP (BigQuery), with a strong background in ETL pipelines, data modeling, variance analysis, KPI tracking, and data governance using tools like Collibra and Snowflake.
+I am a results-driven SAP SD Functional Consultant with 6+ years of experience in end-to-end Order-to-Cash (OTC) implementations and support projects across SAP ECC and S/4HANA environments. I have hands-on expertise in Sales Document Management, Pricing & Condition Technique, Shipping & Logistics Execution, Billing & FI Integration, Credit Management, and Warehouse Management (WM). I have successfully delivered SAP SD projects for leading global clients including UnitedHealth Group, Procter & Gamble, and Siemens, with strong cross-module integration experience across SD-FI, SD-MM, and Logistics Execution.
 
 I've attached my resume for your review. I'd appreciate the opportunity to connect and discuss how my skills could be a great fit for your team.
 
 Thank you for your time and consideration.
 
 Best regards,
-Malathi Gambiraopet
-Phone: +1 609 323 0664
-Email: gmalathi211@gmail.com"""
+Naveen
+Phone: 
+Email: naveenkadiyalasapsd@gmail.com"""
 
 ROLES = [
     {
-        "name": "Data Analyst",
-        "cc_secret": "CC_DATA_ANALYST",
+        "name": "SAP SD Consultant",
+        "cc_secret": "CC_NAVEEN_SAP_SD",
         "keywords": [
-            # Job title
-            "data analyst", "senior data analyst", "sr. data analyst",
-            "sr data analyst", "lead data analyst",
-            # Business Intelligence
-            "bi analyst", "business intelligence analyst",
-            "business analyst", "analytics analyst",
-            # Reporting & Visualization
-            "reporting analyst", "data reporting analyst",
-            "tableau developer", "power bi developer",
-            "data visualization analyst", "insights analyst",
-            "dashboard analyst",
-            # Financial / Domain-specific
-            "financial analyst", "financial data analyst",
-            "risk analyst", "risk data analyst",
-            "operations analyst", "marketing analyst",
-            # SQL / Python focused
-            "sql analyst", "sql developer analyst",
-            # Healthcare / Clinical
-            "clinical data analyst", "healthcare data analyst",
-            # Cloud / Data platforms
-            "aws data analyst", "gcp data analyst",
-            "snowflake analyst", "redshift analyst",
-            "bigquery analyst",
-            # Governance / Quality
-            "data governance analyst", "data quality analyst",
-            "metadata analyst",
-            # KPI / Performance
-            "kpi analyst", "performance analyst",
+            # SAP SD core titles
+            "sap sd", "sap sd consultant", "sap sd functional consultant",
+            "sap sd functional", "senior sap sd", "sr sap sd",
+            "lead sap sd", "sap sd lead",
+            "sap sales and distribution", "sap sales & distribution",
+
+            # OTC / Order to Cash
+            "sap otc", "order to cash", "order-to-cash",
+            "otc consultant", "otc functional consultant",
+            "sap order to cash", "sap order-to-cash",
+
+            # S/4HANA SD
+            "s/4hana sd", "s4hana sd", "sap s/4 sd",
+            "s/4hana sales", "s4hana sales",
+            "sap s/4hana functional", "s/4hana functional consultant",
+
+            # SAP Functional broad
+            "sap functional consultant", "sap ecc consultant",
+            "sap ecc sd", "sap functional analyst",
+
+            # Pricing / Billing / Shipping
+            "sap pricing consultant", "sap billing consultant",
+            "sap shipping consultant", "sap logistics execution",
+            "sap le consultant", "sap delivery consultant",
+
+            # Credit Management
+            "sap credit management", "sap credit consultant",
+
+            # Warehouse Management
+            "sap wm consultant", "sap warehouse management",
+            "sap wm sd",
+
+            # Cross-module integration
+            "sap sd fi", "sap sd mm", "sap sd fi mm",
+            "sap fi sd consultant", "sap mm sd consultant",
+
+            # General SAP roles that may include SD
+            "sap consultant", "sap functional",
+            "sap implementation consultant", "sap support consultant",
+            "sap business analyst", "sap solution consultant",
         ],
     },
 ]
@@ -205,7 +231,16 @@ class EmailAgent:
             m = re.search(pattern, raw, re.IGNORECASE | re.DOTALL)
             return m.group(1).strip() if m else ""
 
-        subject    = extract(r"Subject:\s*(.+?)(?:\r?\n(?!\s)|\Z)").replace("\r\n", " ").replace("\n", " ")
+        subject_raw = extract(r"Subject:\s*(.+?)(?:\r?\n(?!\s)|\Z)").replace("\r\n", " ").replace("\n", " ")
+        from email.header import decode_header
+        decoded_parts = decode_header(subject_raw)
+        subject = ""
+        for part, enc in decoded_parts:
+            if isinstance(part, bytes):
+                subject += part.decode(enc or "utf-8", errors="ignore")
+            else:
+                subject += part
+        subject = subject.strip()
         message_id = extract(r"Message-ID:\s*(.+?)(?:\r?\n(?!\s)|\Z)") or uid.decode()
         sender     = extract(r"From:\s*(.+?)(?:\r?\n(?!\s)|\Z)")
         reply_to   = extract(r"Reply-To:\s*(.+?)(?:\r?\n(?!\s)|\Z)") or sender
@@ -269,16 +304,16 @@ class EmailAgent:
     @staticmethod
     def detect_role(email: dict) -> dict | None:
         subject = email["subject"].lower()
-        body    = email.get("body", "").lower()
+
+        # First check blocklist — skip unwanted roles
+        if is_blocked_role(subject):
+            log.info(f"  Blocked role detected — skipping: {subject[:60]}")
+            return None
 
         for role in ROLES:
             if any(kw in subject for kw in role["keywords"]):
-                if is_allowed_location(subject, body):
-                    log.info(f"  Matched: {role['name']} (Delaware or Remote)")
-                    return role
-                else:
-                    log.info(f"  Skipping (not Delaware/Remote): {subject[:60]}")
-                    return None
+                log.info(f"  Matched: {role['name']}")
+                return role
         return None
 
     # ── Resume Loading ─────────────────────────────────────────────────────────
@@ -286,7 +321,7 @@ class EmailAgent:
     @staticmethod
     def load_resume() -> bytes:
         # 1. Try environment variable first (GitHub Actions)
-        b64_env = os.environ.get("RESUME_DATA_ANALYST_B64", "")
+        b64_env = os.environ.get("RESUME_NAVEEN_SAP_SD_B64", "")
         if b64_env.strip():
             log.info("  Resume: loaded from env variable")
             return base64.b64decode(re.sub(r'\s+', '', b64_env.strip()))
@@ -311,7 +346,7 @@ class EmailAgent:
 
     def send_reply(self, email: dict, role: dict):
         to_email = self._extract_address(email["reply_to"] or email["sender"])
-        cc_email = os.environ.get(role["cc_secret"], "")
+        cc_email = os.environ.get(role["cc_secret"], "naveenkadiyalasapsd@gmail.com")
         subject  = email["subject"] if email["subject"].lower().startswith("re:") else f"Re: {email['subject']}"
 
         msg = MIMEMultipart()
@@ -349,14 +384,14 @@ class EmailAgent:
         with csv_path.open("a") as f:
             if write_header:
                 f.write("timestamp,role,sender,subject,cc\n")
-            cc = os.environ.get(role["cc_secret"], "none")
+            cc = os.environ.get(role["cc_secret"], "naveenkadiyalasapsd@gmail.com")
             f.write(f'{datetime.now().isoformat()},"{role["name"]}","{email["sender"]}","{email["subject"]}","{cc}"\n')
 
     # ── Main Run Loop ──────────────────────────────────────────────────────────
 
     def run(self):
         log.info("=" * 55)
-        log.info("AI Email Agent - Malathi Gambiraopet (Data Analyst)")
+        log.info("AI Email Agent - Naveen (SAP SD Consultant)")
         log.info(f"Time: {datetime.now().isoformat()}")
         log.info("=" * 55)
 
@@ -370,19 +405,24 @@ class EmailAgent:
         self.connect()
         emails  = self.fetch_matching_emails()
         matched = 0
+        sent_ids = set()
 
         for email in emails:
             log.info(f"\nJOB EMAIL: {email['subject']}")
             log.info(f"   From: {email['sender']}")
             try:
+                if email["message_id"] in sent_ids:
+                    log.info("  Duplicate in this run — skipping")
+                    continue
                 role = self.detect_role(email)
                 if role is None:
-                    log.info("  No matching role or location — skipping")
+                    log.info("  No matching role — skipping")
                     continue
                 matched += 1
                 self.send_reply(email, role)
                 self.log_sent(email, role)
                 self.mark_as_replied(email["uid"])
+                sent_ids.add(email["message_id"])
             except Exception as e:
                 log.error(f"Error: {e}", exc_info=True)
 
@@ -391,7 +431,7 @@ class EmailAgent:
         except Exception:
             pass
 
-        log.info(f"\nDone - Replied to {matched} Data Analyst emails (Delaware/Remote only)")
+        log.info(f"\nDone - Replied to {matched} SAP SD emails")
         log.info("Cost: 0.00")
 
 

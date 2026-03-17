@@ -1,6 +1,6 @@
 """
-AI Email Agent - Malathi Gambiraopet
-Only replies to: Data Analyst roles (Delaware or Remote only)
+AI Email Agent - Padmaja Ambati
+Only replies to: SAP SAC / Datasphere / BI Analytics roles
 Searches Gmail by keyword in subject - today only
 """
 
@@ -26,7 +26,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler("logs/agent2.log"),
+        logging.FileHandler("logs/agent_padmaja.log"),
         logging.StreamHandler()
     ]
 )
@@ -45,12 +45,45 @@ def is_within_run_window():
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 REPLIED_LABEL = "AutoReplied"
-RESUME_FILE   = "resume_data_analyst_b64.txt"
-RESUME_NAME   = "Resume_Malathi_Gambiraopet.docx"
+RESUME_FILE   = "resume_padmaja_sac_b64.txt"
+RESUME_NAME   = "Resume_Padmaja_Ambati_SAC_Datasphere.docx"
 SKIP_SENDERS  = ["noreply@", "mailer-daemon@", "notifications@github.com", "noreply.github.com"]
 
+# ── Role Blocklist — skip emails mentioning these roles ────────────────────────
+BLOCKED_ROLES = [
+    "project manager", "program manager", "product manager",
+    "engagement manager", "delivery manager", "account manager",
+    "sap manager", "practice manager", "service manager",
+    "scrum master", "agile coach",
+    "sap director", "director of sap",
+    "sap sd consultant", "sap sd functional",
+    "sap abap", "abap developer", "abap consultant",
+    "sap basis", "basis consultant",
+    "sap mm consultant", "sap pp consultant",
+    "sap hcm", "sap hr consultant",
+    "sap crm", "sap ariba",
+    "sap technical consultant", "sap developer",
+    # Power BI — not applicable
+    "power bi consultant", "power bi developer", "power bi analyst",
+    "power bi architect", "senior power bi", "lead power bi",
+    "power bi engineer", "power bi specialist",
+    # Other unrelated SAP/non-SAP roles
+    "sap rar", "sap revenue accounting",
+    "workforce software", "workforce management",
+    "hotlist", "available consultants", "bench consultants",
+    "sap fico", "sap fi consultant", "sap co consultant",
+    "sap mm", "sap pp", "sap wm", "sap pm",
+    "sap successfactors", "sap hcm", "sap hr",
+    "sap ariba", "sap mdg", "sap ewm",
+    "sap tm consultant", "sap apo",
+]
+
+def is_blocked_role(subject: str) -> bool:
+    subject_lower = subject.lower()
+    return any(blocked in subject_lower for blocked in BLOCKED_ROLES)
+
 # ── Location Filter ────────────────────────────────────────────────────────────
-ALLOWED_LOCATIONS = ["delaware", "remote", "de,", " de ", "(de)"]
+ALLOWED_LOCATIONS = ["texas", "remote", "tx,", " tx ", "(tx)", ", tx"]
 
 def is_allowed_location(subject: str, body: str) -> bool:
     combined = (subject + " " + body).lower()
@@ -58,56 +91,99 @@ def is_allowed_location(subject: str, body: str) -> bool:
 
 REPLY_BODY = """Hi,
 
-I hope you're doing well. I'm writing to express my interest in the Data Analyst opportunity.
+I hope you're doing well. I'm writing to express my interest in the SAP Analytics / BI opportunity.
 
-I am a results-driven Senior Data Analyst with 8+ years of experience transforming raw data into actionable insights, specializing in financial reporting, business intelligence, and data visualization. I have expertise in SQL, Python (Pandas, NumPy), R, Tableau, Power BI, and cloud platforms including AWS (Redshift, S3, Athena) and GCP (BigQuery), with a strong background in ETL pipelines, data modeling, variance analysis, KPI tracking, and data governance using tools like Collibra and Snowflake.
+I am a Senior BI and Analytics Consultant with 15+ years of experience delivering enterprise reporting and analytics solutions across healthcare and retail domains. I have strong expertise in SAP Datasphere, SAP Analytics Cloud (SAC), Power BI, and Tableau for operational and executive analytics. I have proven experience integrating data from SAP S/4HANA, ECC, and non-SAP systems into centralized analytics platforms, designing scalable multi-layer data models, ETL pipelines, and governed semantic layers. I have delivered real-time dashboards for claims processing, benefits administration, workforce, payroll, finance, and supply chain analytics, with deep experience in SAC Planning, FP&A, budgeting, forecasting, and data governance.
 
 I've attached my resume for your review. I'd appreciate the opportunity to connect and discuss how my skills could be a great fit for your team.
 
 Thank you for your time and consideration.
 
 Best regards,
-Malathi Gambiraopet
-Phone: +1 609 323 0664
-Email: gmalathi211@gmail.com"""
+Padmaja Ambati
+Phone: 720-401-3612
+Email: padmaja8419@gmail.com"""
 
 ROLES = [
     {
-        "name": "Data Analyst",
-        "cc_secret": "CC_DATA_ANALYST",
+        "name": "SAP SAC / Datasphere Consultant",
+        "cc_secret": "CC_PADMAJA_SAC",
         "keywords": [
-            # Job title
-            "data analyst", "senior data analyst", "sr. data analyst",
-            "sr data analyst", "lead data analyst",
-            # Business Intelligence
-            "bi analyst", "business intelligence analyst",
-            "business analyst", "analytics analyst",
-            # Reporting & Visualization
-            "reporting analyst", "data reporting analyst",
-            "tableau developer", "power bi developer",
-            "data visualization analyst", "insights analyst",
-            "dashboard analyst",
-            # Financial / Domain-specific
-            "financial analyst", "financial data analyst",
-            "risk analyst", "risk data analyst",
-            "operations analyst", "marketing analyst",
-            # SQL / Python focused
-            "sql analyst", "sql developer analyst",
-            # Healthcare / Clinical
-            "clinical data analyst", "healthcare data analyst",
-            # Cloud / Data platforms
-            "aws data analyst", "gcp data analyst",
-            "snowflake analyst", "redshift analyst",
-            "bigquery analyst",
-            # Governance / Quality
-            "data governance analyst", "data quality analyst",
-            "metadata analyst",
-            # KPI / Performance
-            "kpi analyst", "performance analyst",
+            # SAP Analytics Cloud (SAC)
+            "sap analytics cloud", "sap sac", "sac consultant",
+            "sac developer", "sac planning", "sac reporting",
+            "senior sac consultant", "lead sac consultant",
+            "sac functional consultant", "sac technical consultant",
+
+            # SAP Datasphere
+            "sap datasphere", "datasphere consultant",
+            "datasphere developer", "datasphere architect",
+            "sap bdc", "sap bdc consultant",
+
+            # SAP BW / BW4HANA
+            "sap bw consultant", "sap bw developer",
+            "sap bw/4hana", "bw4hana consultant",
+            "sap bw on hana", "sap bw4 hana",
+            "sap bi consultant", "sap bi developer",
+            "sap business intelligence",
+
+            # SAP BPC
+            "sap bpc consultant", "sap bpc developer",
+            "sap bpc planning", "bpc standard",
+
+            # SAP HANA
+            "sap hana consultant", "sap hana developer",
+            "hana modeler", "sap hana modeling",
+
+            # SAP BusinessObjects
+            "sap businessobjects", "sap bobj",
+            "business objects consultant", "webi consultant",
+            "crystal reports consultant",
+
+            # Tableau
+            "tableau developer", "tableau consultant",
+            "senior tableau developer", "lead tableau developer",
+            "tableau architect", "tableau analyst",
+
+            # BI / Analytics general
+            "bi consultant", "bi developer", "bi analyst",
+            "bi architect", "bi lead", "bi manager",
+            "business intelligence consultant",
+            "business intelligence developer",
+            "analytics consultant", "analytics developer",
+            "senior analytics consultant", "lead analytics consultant",
+            "data analytics consultant", "data analytics developer",
+
+            # FP&A / Planning
+            "fp&a consultant", "financial planning analyst",
+            "sac fp&a", "planning consultant",
+            "budgeting forecasting consultant",
+
+            # Cloud BI / Migration
+            "sap btp consultant", "sap btp developer",
+            "tableau cloud migration",
+            "bi cloud consultant",
+
+            # Reporting
+            "enterprise reporting consultant",
+            "ssrs developer", "ssis developer",
+            "ssas developer", "data warehouse consultant",
         ],
     },
 ]
 
+
+# ── Body Keywords — search email body for these SAP-specific terms ─────────────
+BODY_KEYWORDS = [
+    "sap analytics cloud", "sap sac", "sac consultant", "sac planning",
+    "sap datasphere", "datasphere consultant", "sap bdc",
+    "sap bw consultant", "sap bw developer", "bw/4hana",
+    "sap businessobjects", "sap bobj",
+]
+
+def matches_body_keywords(body: str) -> bool:
+    body_lower = body.lower()
+    return any(kw in body_lower for kw in BODY_KEYWORDS)
 
 # ── Email Agent Class ──────────────────────────────────────────────────────────
 class EmailAgent:
@@ -185,6 +261,7 @@ class EmailAgent:
 
     def _search_uids_by_keywords(self, today: str) -> set:
         uid_set = set()
+        # Search by subject keywords
         for role in ROLES:
             for kw in role["keywords"]:
                 try:
@@ -193,6 +270,14 @@ class EmailAgent:
                         uid_set.add(uid)
                 except Exception:
                     pass
+        # Also search by body keywords
+        for kw in BODY_KEYWORDS:
+            try:
+                _, msg_ids = self.mail.search(None, f'(UNSEEN SINCE "{today}" BODY "{kw}")')
+                for uid in msg_ids[0].split():
+                    uid_set.add(uid)
+            except Exception:
+                pass
         return uid_set
 
     def _parse_header(self, uid) -> dict | None:
@@ -205,7 +290,16 @@ class EmailAgent:
             m = re.search(pattern, raw, re.IGNORECASE | re.DOTALL)
             return m.group(1).strip() if m else ""
 
-        subject    = extract(r"Subject:\s*(.+?)(?:\r?\n(?!\s)|\Z)").replace("\r\n", " ").replace("\n", " ")
+        subject_raw = extract(r"Subject:\s*(.+?)(?:\r?\n(?!\s)|\Z)").replace("\r\n", " ").replace("\n", " ")
+        from email.header import decode_header
+        decoded_parts = decode_header(subject_raw)
+        subject = ""
+        for part, enc in decoded_parts:
+            if isinstance(part, bytes):
+                subject += part.decode(enc or "utf-8", errors="ignore")
+            else:
+                subject += part
+        subject = subject.strip()
         message_id = extract(r"Message-ID:\s*(.+?)(?:\r?\n(?!\s)|\Z)") or uid.decode()
         sender     = extract(r"From:\s*(.+?)(?:\r?\n(?!\s)|\Z)")
         reply_to   = extract(r"Reply-To:\s*(.+?)(?:\r?\n(?!\s)|\Z)") or sender
@@ -271,13 +365,22 @@ class EmailAgent:
         subject = email["subject"].lower()
         body    = email.get("body", "").lower()
 
+        # First check blocklist — skip unwanted roles
+        if is_blocked_role(subject):
+            log.info(f"  Blocked role detected — skipping: {subject[:60]}")
+            return None
+
         for role in ROLES:
-            if any(kw in subject for kw in role["keywords"]):
+            subject_match = any(kw in subject for kw in role["keywords"])
+            body_match    = matches_body_keywords(body)
+
+            if subject_match or body_match:
+                match_source = "subject" if subject_match else "body"
                 if is_allowed_location(subject, body):
-                    log.info(f"  Matched: {role['name']} (Delaware or Remote)")
+                    log.info(f"  Matched via {match_source}: {role['name']} (Texas or Remote)")
                     return role
                 else:
-                    log.info(f"  Skipping (not Delaware/Remote): {subject[:60]}")
+                    log.info(f"  Skipping (not Texas/Remote): {subject[:60]}")
                     return None
         return None
 
@@ -286,7 +389,7 @@ class EmailAgent:
     @staticmethod
     def load_resume() -> bytes:
         # 1. Try environment variable first (GitHub Actions)
-        b64_env = os.environ.get("RESUME_DATA_ANALYST_B64", "")
+        b64_env = os.environ.get("RESUME_PADMAJA_SAC_B64", "")
         if b64_env.strip():
             log.info("  Resume: loaded from env variable")
             return base64.b64decode(re.sub(r'\s+', '', b64_env.strip()))
@@ -311,15 +414,20 @@ class EmailAgent:
 
     def send_reply(self, email: dict, role: dict):
         to_email = self._extract_address(email["reply_to"] or email["sender"])
-        cc_email = os.environ.get(role["cc_secret"], "")
-        subject  = email["subject"] if email["subject"].lower().startswith("re:") else f"Re: {email['subject']}"
+        cc_emails = [
+            os.environ.get(role["cc_secret"], "padmaja8419@gmail.com"),
+            "sudheerkumar@dgpeople.com",
+        ]
+        cc_emails = [c for c in cc_emails if c]
+        cc_str    = ", ".join(cc_emails)
+        subject   = email["subject"] if email["subject"].lower().startswith("re:") else f"Re: {email['subject']}"
 
         msg = MIMEMultipart()
         msg["From"]    = self.your_email
         msg["To"]      = to_email
         msg["Subject"] = subject
-        if cc_email:
-            msg["Cc"] = cc_email
+        if cc_str:
+            msg["Cc"] = cc_str
 
         msg.attach(MIMEText(REPLY_BODY, "plain"))
 
@@ -330,14 +438,14 @@ class EmailAgent:
         attachment.add_header("Content-Disposition", f'attachment; filename="{RESUME_NAME}"')
         msg.attach(attachment)
 
-        recipients = [to_email] + ([cc_email] if cc_email else [])
+        recipients = [to_email] + cc_emails
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(self.your_email, self.app_password)
             server.sendmail(self.your_email, recipients, msg.as_string())
 
         log.info(f"  Sent to: {to_email}")
-        if cc_email:
-            log.info(f"  CC'd:    {cc_email}")
+        for c in cc_emails:
+            log.info(f"  CC'd:    {c}")
         time.sleep(3)
 
     # ── CSV Logging ────────────────────────────────────────────────────────────
@@ -349,14 +457,14 @@ class EmailAgent:
         with csv_path.open("a") as f:
             if write_header:
                 f.write("timestamp,role,sender,subject,cc\n")
-            cc = os.environ.get(role["cc_secret"], "none")
+            cc = "padmaja8419@gmail.com, sudheerkumar@dgpeople.com"
             f.write(f'{datetime.now().isoformat()},"{role["name"]}","{email["sender"]}","{email["subject"]}","{cc}"\n')
 
     # ── Main Run Loop ──────────────────────────────────────────────────────────
 
     def run(self):
         log.info("=" * 55)
-        log.info("AI Email Agent - Malathi Gambiraopet (Data Analyst)")
+        log.info("AI Email Agent - Padmaja Ambati (SAP SAC/Datasphere)")
         log.info(f"Time: {datetime.now().isoformat()}")
         log.info("=" * 55)
 
@@ -370,19 +478,24 @@ class EmailAgent:
         self.connect()
         emails  = self.fetch_matching_emails()
         matched = 0
+        sent_ids = set()
 
         for email in emails:
             log.info(f"\nJOB EMAIL: {email['subject']}")
             log.info(f"   From: {email['sender']}")
             try:
+                if email["message_id"] in sent_ids:
+                    log.info("  Duplicate in this run — skipping")
+                    continue
                 role = self.detect_role(email)
                 if role is None:
-                    log.info("  No matching role or location — skipping")
+                    log.info("  No matching role — skipping")
                     continue
                 matched += 1
                 self.send_reply(email, role)
                 self.log_sent(email, role)
                 self.mark_as_replied(email["uid"])
+                sent_ids.add(email["message_id"])
             except Exception as e:
                 log.error(f"Error: {e}", exc_info=True)
 
@@ -391,7 +504,7 @@ class EmailAgent:
         except Exception:
             pass
 
-        log.info(f"\nDone - Replied to {matched} Data Analyst emails (Delaware/Remote only)")
+        log.info(f"\nDone - Replied to {matched} SAP SAC/Datasphere emails")
         log.info("Cost: 0.00")
 
 
