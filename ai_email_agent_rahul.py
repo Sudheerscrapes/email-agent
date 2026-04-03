@@ -90,69 +90,74 @@ def is_within_run_window():
 
 SHARED_REPLY = """Hi,
 
-I hope you're doing well. I'm writing to express my interest in any suitable opportunities that match my background and experience.
+I hope you're doing well. I'm reaching out to express my interest in opportunities that align with my background and experience.
 
-I have several years of experience working as a Data Engineer, with strong expertise in designing and building scalable data pipelines, ETL workflows, and cloud-based data solutions. My work has involved working with large datasets, optimizing data processing, building data warehouses, and collaborating with analytics and business teams to deliver data-driven insights.
+I'm a Data Engineer with 5+ years of experience building scalable cloud-based data architectures and real-time analytics solutions. My core expertise includes Azure (ADF, Synapse Analytics, Databricks, ADLS, Event Hubs), Snowflake, Apache Spark (PySpark), Kafka, and dbt. I have hands-on experience designing ETL/ELT pipelines, Lakehouse architectures, data warehouses, and CI/CD workflows using Azure DevOps and Terraform. I've delivered solutions across healthcare, finance, insurance, and telecom domains with HIPAA and GDPR compliance.
 
-I've attached my resume for your review. I'd appreciate the opportunity to connect and discuss how my skills could be a good fit for your team.
+I've attached my resume for your review. I'd love the opportunity to connect and discuss how my skills could be a great fit for your team.
 
 Thank you for your time and consideration.
 
 Best regards,
-Rahul
-Phone: [Your Phone Number]
+Rahul Kumar Gunti
+Phone: (216) 336-9198
 Email: harshithacloud81@gmail.com"""
 
 ROLES = [
     {
         "name": "Data Engineer",
         "keywords": [
-            "data engineer", "data engineering", "big data engineer",
-            "data platform engineer", "data infrastructure engineer",
-            "data pipeline engineer", "etl engineer", "elt engineer",
-            "spark engineer", "hadoop engineer", "kafka engineer",
+            "data engineer", "data engineering", "senior data engineer",
+            "big data engineer", "data platform engineer",
+            "data infrastructure engineer", "data pipeline engineer",
+            "azure data engineer", "cloud data engineer",
             "databricks engineer", "snowflake engineer",
+            "spark engineer", "kafka engineer",
         ],
         "resume_file": "resume_rahul_b64.txt",
         "cc_secret": "CC_DATA_ENGINEER",
         "reply": SHARED_REPLY,
     },
     {
-        "name": "Data Analyst",
-        "keywords": [
-            "data analyst", "business analyst", "analytics engineer",
-            "bi analyst", "business intelligence analyst",
-            "reporting analyst", "sql analyst",
-            "data and analytics", "insights analyst",
-        ],
-        "resume_file": "resume_rahul_b64.txt",
-        "cc_secret": "CC_DATA_ANALYST",
-        "reply": SHARED_REPLY,
-    },
-    {
         "name": "ETL / Pipeline Engineer",
         "keywords": [
-            "etl developer", "etl pipeline", "data pipeline",
+            "etl engineer", "elt engineer", "etl developer",
+            "etl pipeline", "data pipeline", "pipeline engineer",
             "pipeline developer", "data integration engineer",
-            "data integration developer", "informatica", "talend",
-            "dbt engineer", "dbt developer",
+            "data integration developer", "adf engineer",
+            "azure data factory", "dbt engineer", "dbt developer",
+            "informatica", "talend",
         ],
         "resume_file": "resume_rahul_b64.txt",
         "cc_secret": "CC_ETL",
         "reply": SHARED_REPLY,
     },
     {
-        "name": "BI / Cloud Data Engineer",
+        "name": "Azure / Cloud Data Engineer",
         "keywords": [
-            "bi engineer", "bi developer", "power bi developer",
-            "tableau developer", "cloud data engineer",
-            "aws data engineer", "azure data engineer",
-            "gcp data engineer", "cloud data architect",
+            "azure synapse", "synapse analytics", "azure databricks",
+            "azure data factory", "azure data engineer",
+            "azure cloud engineer", "cloud data architect",
             "data warehouse engineer", "data warehouse developer",
-            "redshift engineer", "azure synapse", "google bigquery",
+            "snowflake developer", "snowflake architect",
+            "lakehouse engineer", "delta lake engineer",
+            "aws data engineer", "gcp data engineer",
+            "google bigquery", "redshift engineer",
         ],
         "resume_file": "resume_rahul_b64.txt",
-        "cc_secret": "CC_BI_CLOUD",
+        "cc_secret": "CC_AZURE_CLOUD",
+        "reply": SHARED_REPLY,
+    },
+    {
+        "name": "Analytics / BI Engineer",
+        "keywords": [
+            "analytics engineer", "bi engineer", "bi developer",
+            "power bi developer", "power bi engineer",
+            "data analytics engineer", "business intelligence engineer",
+            "business intelligence developer",
+        ],
+        "resume_file": "resume_rahul_b64.txt",
+        "cc_secret": "CC_ANALYTICS",
         "reply": SHARED_REPLY,
     },
 ]
