@@ -1,0 +1,32 @@
+name: Run Email Agent - Rahul (Data Engineer)
+
+on:
+  schedule:
+    - cron: '0 13 * * *'   # 6:30 PM IST = 13:00 UTC  (runs once daily)
+    - cron: '0 16 * * *'   # 9:30 PM IST = 16:00 UTC  (second run)
+    - cron: '0 20 * * *'   # 1:30 AM IST = 20:00 UTC  (third run)
+  workflow_dispatch:         # Manual trigger from GitHub UI
+
+jobs:
+  run-rahul-agent:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pytz
+
+      - name: Run Rahul Email Agent
+        env:
+          IMAP_EMAIL: ${{ secrets.IMAP_EMAIL }}
+          IMAP_APP_PASSWORD: ${{ secrets.IMAP_APP_PASSWORD }}
+          RAHUL_SMTP_EMAIL: ${{ secrets.RAHUL_SMTP_EMAIL }}
+          RAHUL_SMTP_APP_PASSWORD: ${{ secrets.RAHUL_SMTP_APP_PASSWORD }}
+        run: python ai_email_agent_rahul.py
