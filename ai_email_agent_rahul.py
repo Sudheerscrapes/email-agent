@@ -489,7 +489,7 @@ def main():
     log.info("\n" + "=" * 70)
     log.info(f"Done — Replied to {matched} job emails")
     log.info(f"SCAN account : {os.environ.get('IMAP_EMAIL')}")
-    log.info(f"SEND account : {os.environ.get("RAHUL_SMTP_EMAIL")}")
+log.info(f"SEND account : {os.environ.get('RAHUL_SMTP_EMAIL')}")
     log.info(f"Daily sends  : {daily_send_count}/{MAX_DAILY_SENDS}")
     log.info(f"Daily dedup  : {DEDUP_FILE} (resets at midnight)")
     log.info("Cost: 0.00")
