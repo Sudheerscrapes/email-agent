@@ -327,9 +327,17 @@ def get_resume(role):
     log.info("Resume: %s", fname)
     raw = Path(fname).read_bytes()
     if raw[:2] in (b'\xff\xfe', b'\xfe\xff'):
-        b64 = re.sub(r'\s+', '', raw.decode('utf-16').strip())
+        text = raw.decode('utf-16').strip()
     else:
-        b64 = re.sub(r'\s+', '', raw.decode('latin-1').strip())
+        text = raw.decode('latin-1').strip()
+    # Strip certutil BEGIN/END headers and all whitespace
+    lines = text.splitlines()
+    lines = [l for l in lines if not l.startswith("-----")]
+    b64 = re.sub(r'\s+', '', "".join(lines))
+    # Fix base64 padding
+    missing = len(b64) % 4
+    if missing:
+        b64 += "=" * (4 - missing)
     return base64.b64decode(b64)
 
 def send_reply(email, role, server):
