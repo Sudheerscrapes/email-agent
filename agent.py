@@ -10,6 +10,7 @@ FIXES:
 5. Skips any email with subject starting with "Re:"
 6. SCAN from sudheeritservices1@gmail.com
 7. SEND from rajumodhala777@gmail.com
+8. Daily send cap (450) to avoid Gmail 550 limit errors
 """
 
 import os, base64, logging, re, smtplib, time, json
@@ -32,41 +33,44 @@ log = logging.getLogger(__name__)
 # 📅 DAILY DEDUP - Resets every day at midnight
 # ══════════════════════════════════════════════════════════════════════════════
 DEDUP_FILE = Path("logs") / "daily_replied_senders.json"
+MAX_DAILY_SENDS = 450  # Gmail hard limit is 500 — stay safely under it
 
 def get_today_date():
     return str(date.today())
 
 def load_daily_dedup():
-    """Load today's replied senders. If file is from different day, reset."""
+    """Load today's replied senders and send count. If file is from different day, reset."""
     if DEDUP_FILE.exists():
         try:
-            with open(DEDUP_FILE, "r", encoding="utf-8-sig") as f:  # ✅ handles BOM
+            with open(DEDUP_FILE, "r", encoding="utf-8-sig") as f:  # handles BOM
                 data = json.load(f)
                 file_date = data.get("date", "")
                 today = get_today_date()
                 if file_date == today:
                     senders = set(data.get("senders", []))
-                    log.info(f"📅 TODAY ({today}): Loaded {len(senders)} senders from dedup file")
-                    return senders
+                    send_count = data.get("send_count", 0)
+                    log.info(f"📅 TODAY ({today}): {len(senders)} senders, {send_count}/{MAX_DAILY_SENDS} sent so far")
+                    return senders, send_count
                 else:
                     log.info(f"📅 NEW DAY! (was {file_date}, now {today}) - Resetting dedup")
-                    return set()
+                    return set(), 0
         except Exception as e:
             log.warning(f"⚠️ Could not load dedup file: {e}")
 
     log.info(f"📅 TODAY ({get_today_date()}): No dedup file yet - starting fresh")
-    return set()
+    return set(), 0
 
-def save_daily_dedup(senders):
-    """Save today's replied senders."""
+def save_daily_dedup(senders, send_count=0):
+    """Save today's replied senders and send count."""
     data = {
         "date": get_today_date(),
-        "senders": sorted(list(senders))
+        "senders": sorted(list(senders)),
+        "send_count": send_count
     }
     try:
-        with open(DEDUP_FILE, "w", encoding="utf-8") as f:  # ✅ plain utf-8, no BOM
+        with open(DEDUP_FILE, "w", encoding="utf-8") as f:  # plain utf-8, no BOM
             json.dump(data, f, indent=2)
-        log.info(f"✅ SAVED TO DEDUP: {len(senders)} senders for {get_today_date()}")
+        log.info(f"✅ SAVED TO DEDUP: {len(senders)} senders, {send_count}/{MAX_DAILY_SENDS} sent today")
     except Exception as e:
         log.error(f"❌ Could not save dedup file: {e}")
 
@@ -136,14 +140,14 @@ ROLES = [
 
 REPLIED_LABEL = "AutoReplied"
 
-# ✅ FIX: Skip own email addresses + system senders
+# Skip own email addresses + system senders
 SKIP_SENDERS = [
     "noreply@",
     "mailer-daemon@",
     "notifications@github.com",
     "noreply.github.com",
-    "sudheeritservices1@gmail.com",   # ✅ own IMAP scan account
-    "rajumodhala777@gmail.com",        # ✅ own SMTP send account
+    "sudheeritservices1@gmail.com",   # own IMAP scan account
+    "rajumodhala777@gmail.com",        # own SMTP send account
 ]
 
 def extract_address(s):
@@ -201,7 +205,7 @@ def fetch_matching_emails():
     replied_ids = get_replied_message_ids(mail)
     log.info(f"Gmail AutoReplied label: {len(replied_ids)} emails")
 
-    replied_senders = load_daily_dedup()
+    replied_senders, send_count = load_daily_dedup()
 
     today = datetime.now().strftime("%d-%b-%Y")
 
@@ -239,7 +243,7 @@ def fetch_matching_emails():
             subj_match = re.search(r"Subject:\s*(.+?)(?:\r?\n(?!\s)|\Z)", hdr_raw, re.IGNORECASE | re.DOTALL)
             subject = subj_match.group(1).strip().replace("\r\n", " ").replace("\n", " ") if subj_match else ""
 
-            # ✅ FIX: Skip own reply threads — subjects starting with "Re:"
+            # Skip own reply threads — subjects starting with "Re:"
             if subject.lower().startswith("re:"):
                 log.info(f"  Skipping — own reply thread: {subject[:50]}")
                 continue
@@ -253,7 +257,7 @@ def fetch_matching_emails():
             rt_match = re.search(r"Reply-To:\s*(.+?)(?:\r?\n(?!\s)|\Z)", hdr_raw, re.IGNORECASE | re.DOTALL)
             reply_to = rt_match.group(1).strip() if rt_match else sender
 
-            # ✅ FIX: Skip own email addresses and system senders
+            # Skip own email addresses and system senders
             if any(skip in sender.lower() for skip in SKIP_SENDERS):
                 log.info(f"  Skipping sender: {subject[:50]}")
                 continue
@@ -283,7 +287,7 @@ def fetch_matching_emails():
             time.sleep(1)
 
     log.info(f"Ready to process {len(emails)} emails")
-    return emails, mail, replied_senders
+    return emails, mail, replied_senders, send_count
 
 def detect_role(email):
     subject = email["subject"].lower()
@@ -312,7 +316,7 @@ def send_reply(email, role):
     subject = f"Re: {email['subject']}" if not email["subject"].lower().startswith("re:") else email["subject"]
 
     msg = MIMEMultipart()
-    msg["From"] = smtp_email               # ✅ sends FROM rajumodhala777
+    msg["From"] = smtp_email
     msg["To"] = to_email
     msg["Subject"] = subject
     if cc_email: msg["Cc"] = cc_email
@@ -330,7 +334,7 @@ def send_reply(email, role):
     if cc_email: recipients.append(cc_email)
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(smtp_email, os.environ["SMTP_APP_PASSWORD"])  # ✅ login as rajumodhala777
+        server.login(smtp_email, os.environ["SMTP_APP_PASSWORD"])
         server.sendmail(smtp_email, recipients, msg.as_string())
 
     log.info(f"  Sent from : {smtp_email}")
@@ -366,7 +370,16 @@ def main():
         log.error(f"Missing env vars: {', '.join(missing)}")
         return
 
-    emails, mail, replied_senders = fetch_matching_emails()
+    emails, mail, replied_senders, daily_send_count = fetch_matching_emails()
+
+    # Warn if already near the limit before we even start
+    remaining = MAX_DAILY_SENDS - daily_send_count
+    log.info(f"Daily send budget: {daily_send_count}/{MAX_DAILY_SENDS} used, {remaining} remaining today")
+    if remaining <= 0:
+        log.warning(f"Daily send limit already reached ({daily_send_count}/{MAX_DAILY_SENDS}). Stopping.")
+        try: mail.logout()
+        except Exception: pass
+        return
 
     sent_senders = set()
     matched = 0
@@ -378,7 +391,7 @@ def main():
         try:
             sender_addr = email.get("sender_addr", extract_address(email["reply_to"] or email["sender"]))
 
-            # ✅ FIX 1: DEDUP CHECK FIRST — before anything else
+            # DEDUP CHECK FIRST — before anything else
             if sender_addr in replied_senders:
                 log.info(f"  SKIPPING — already replied to {sender_addr} today (dedup file)")
                 continue
@@ -393,17 +406,24 @@ def main():
                 log.info("  No matching role — skipping")
                 continue
 
+            # ── DAILY SEND CAP CHECK ──────────────────────────────────────────
+            if daily_send_count >= MAX_DAILY_SENDS:
+                log.warning(f"  ⛔ DAILY LIMIT REACHED ({daily_send_count}/{MAX_DAILY_SENDS}) — stopping for today. Remaining emails will be picked up tomorrow.")
+                break
+            # ─────────────────────────────────────────────────────────────────
+
             matched += 1
-            log.info(f"  SENDING REPLY...")
+            log.info(f"  SENDING REPLY... ({daily_send_count + 1}/{MAX_DAILY_SENDS})")
             send_reply(email, role)
             log_sent(email, role)
             mail = mark_as_replied(mail, email["uid"])
 
             replied_senders.add(sender_addr)
             sent_senders.add(sender_addr)
+            daily_send_count += 1
 
-            # ✅ FIX 2: SAVE DEDUP IMMEDIATELY after each send
-            save_daily_dedup(replied_senders)
+            # Save dedup immediately after each successful send
+            save_daily_dedup(replied_senders, daily_send_count)
 
         except Exception as e:
             log.error(f"Error processing email: {e}", exc_info=True)
@@ -415,6 +435,7 @@ def main():
     log.info(f"Done — Replied to {matched} job emails")
     log.info(f"SCAN account : {os.environ.get('IMAP_EMAIL')}")
     log.info(f"SEND account : {os.environ.get('SMTP_EMAIL')}")
+    log.info(f"Daily sends  : {daily_send_count}/{MAX_DAILY_SENDS}")
     log.info(f"Daily dedup  : {DEDUP_FILE} (resets at midnight)")
     log.info("Cost: 0.00")
     log.info("=" * 70)
