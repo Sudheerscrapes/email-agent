@@ -332,7 +332,7 @@ def get_resume(role):
 
 def send_reply(email, role, server):
     """Send reply using an already-connected SMTP server (no new login)."""
-    smtp_email = os.environ["SMTP_EMAIL"]  # harshithacloud81@gmail.com
+    smtp_email = os.environ["RAHUL_SMTP_EMAIL"]  # harshithacloud81@gmail.com
     to_email = extract_address(email["reply_to"] or email["sender"])
     cc_email = os.environ.get(role["cc_secret"], "")
 
@@ -388,7 +388,7 @@ def main():
     log.info("Within run window (6:30 PM - 4:30 AM IST). Proceeding...")
 
     # Validate all required env vars
-    required = ["IMAP_EMAIL", "IMAP_APP_PASSWORD", "SMTP_EMAIL", "SMTP_APP_PASSWORD"]
+    required = ["IMAP_EMAIL", "IMAP_APP_PASSWORD", "RAHUL_SMTP_EMAIL", "RAHUL_SMTP_APP_PASSWORD"]
     missing = [r for r in required if not os.environ.get(r)]
     if missing:
         log.error(f"Missing env vars: {', '.join(missing)}")
@@ -406,11 +406,11 @@ def main():
         return
 
     # ── OPEN ONE SMTP CONNECTION FOR ALL EMAILS ──────────────────────────────
-    smtp_email = os.environ["SMTP_EMAIL"]
+    smtp_email = os.environ["RAHUL_SMTP_EMAIL"]
     smtp_server = None
     try:
         smtp_server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
-        smtp_server.login(smtp_email, os.environ["SMTP_APP_PASSWORD"])
+        smtp_server.login(smtp_email, os.environ["RAHUL_SMTP_APP_PASSWORD"])
         log.info(f"✅ SMTP connected: {smtp_email}")
     except Exception as e:
         log.error(f"❌ Could not connect to SMTP: {e}")
@@ -469,7 +469,7 @@ def main():
             try:
                 log.info("  ↩️ Reconnecting SMTP...")
                 smtp_server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
-                smtp_server.login(smtp_email, os.environ["SMTP_APP_PASSWORD"])
+                smtp_server.login(smtp_email, os.environ["RAHUL_SMTP_APP_PASSWORD"])
                 log.info("  ✅ SMTP reconnected successfully")
             except Exception as se:
                 log.error(f"  ❌ SMTP reconnect failed: {se}")
@@ -489,7 +489,7 @@ def main():
     log.info("\n" + "=" * 70)
     log.info(f"Done — Replied to {matched} job emails")
     log.info(f"SCAN account : {os.environ.get('IMAP_EMAIL')}")
-    log.info(f"SEND account : {os.environ.get('SMTP_EMAIL')}")
+    log.info(f"SEND account : {os.environ.get("RAHUL_SMTP_EMAIL")}")
     log.info(f"Daily sends  : {daily_send_count}/{MAX_DAILY_SENDS}")
     log.info(f"Daily dedup  : {DEDUP_FILE} (resets at midnight)")
     log.info("Cost: 0.00")
