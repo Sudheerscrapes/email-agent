@@ -1,20 +1,17 @@
-name: Naveen SAP SD Email Agent
+name: Run Email Agent - Naveen (SAP SD)
 
 on:
   schedule:
-    # Runs every 30 minutes between 6:30 PM - 4:30 AM IST
-    # IST = UTC+5:30, so 6:30 PM IST = 13:00 UTC, 4:30 AM IST = 23:00 UTC
-    - cron: '0,30 13-23 * * *'   # 6:30 PM to 11:30 PM IST
-    - cron: '0,30 0-23 * * *'    # midnight to 4:30 AM IST (script handles window check)
-  workflow_dispatch:              # Allow manual trigger
+    - cron: '0 13 * * *'   # 6:30 PM IST
+    - cron: '0 16 * * *'   # 9:30 PM IST
+    - cron: '0 20 * * *'   # 1:30 AM IST
+  workflow_dispatch:
 
 jobs:
-  run-agent:
+  run-naveen-agent:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -22,14 +19,12 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: |
-          pip install pytz
+        run: pip install pytz
 
-      - name: Run Naveen SAP SD Email Agent
+      - name: Run Naveen Email Agent
         env:
-          YOUR_EMAIL: ${{ secrets.YOUR_EMAIL }}
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          CC_NAVEEN_SAP_SD: naveenkadiyalasapsd@gmail.com
-          RESUME_NAVEEN_SAP_SD_B64: ${{ secrets.RESUME_NAVEEN_SAP_SD_B64 }}
-        run: |
-          python agent_naveen.py
+          IMAP_EMAIL: ${{ secrets.IMAP_EMAIL }}
+          IMAP_APP_PASSWORD: ${{ secrets.IMAP_APP_PASSWORD }}
+          NAVEEN_SMTP_EMAIL: ${{ secrets.NAVEEN_SMTP_EMAIL }}
+          NAVEEN_SMTP_APP_PASSWORD: ${{ secrets.NAVEEN_SMTP_APP_PASSWORD }}
+        run: python agent_naveen.py
