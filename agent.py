@@ -94,7 +94,7 @@ SHARED_REPLY = """Hi,
 
 
 In response to your job posting.
-Here I am attaching my consultant's updated resume.
+Here I am attaching my consultant's  resume.
 Please review the resume and let me know if it matches your position.
 Looking forward to working with you.
 
