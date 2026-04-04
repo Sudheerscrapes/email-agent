@@ -69,11 +69,17 @@ Looking forward to working with you.
 
 Thanks & Regards,
 Sudheer Kumar, Mandava
+
 Mail: sudheer@adeptscripts.com
+
 Mobile: +1 8374225556
+
 8501 WADE BOULEVARD SUITE 870
+
 FRISCO TX 75035
+
 Recruitment Manager
+
 www.adeptscripts.com"""
 
 ROLES = [
