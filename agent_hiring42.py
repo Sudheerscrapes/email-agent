@@ -176,7 +176,7 @@ def scrape_jobs():
         time.sleep(5)
         last_height = driver.execute_script("return document.body.scrollHeight")
         scroll_attempts = 0
-        while scroll_attempts < 10:
+        while scroll_attempts < 100:
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             time.sleep(2)
             new_height = driver.execute_script("return document.body.scrollHeight")
@@ -367,6 +367,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
