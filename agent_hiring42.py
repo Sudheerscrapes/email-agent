@@ -185,28 +185,58 @@ def get_chrome_driver():
     driver.implicitly_wait(5)
     return driver
 
-def wait_for_react(driver, timeout=30):
+def wait_for_react(driver, timeout=60):
+    """Wait for React root to render with multiple fallback checks."""
     try:
+        # 1. Wait for React root to have children
         WebDriverWait(driver, timeout).until(
             lambda d: d.execute_script(
                 "return document.getElementById('root') && "
                 "document.getElementById('root').children.length > 0"
             )
         )
+        # 2. Also wait for at least one job-like element
+        WebDriverWait(driver, 20).until(
+            lambda d: "@" in d.find_element(By.TAG_NAME, "body").text
+            or "Posted:" in d.find_element(By.TAG_NAME, "body").text
+        )
         time.sleep(3)
         h = driver.execute_script("return document.body.scrollHeight")
         log.info("React ready. Height: %d", h)
         return h
     except Exception as e:
+        # Fallback: even if React check failed, check if page has useful content
+        try:
+            body = driver.find_element(By.TAG_NAME, "body").text
+            h    = driver.execute_script("return document.body.scrollHeight")
+            if "Posted:" in body or "@" in body:
+                log.info("React timeout but page has content (height=%d) - continuing", h)
+                return h
+        except Exception:
+            pass
         log.warning("React wait timed out: %s", e)
         return 0
 
-def load_search_page(driver, search_term):
+def load_search_page(driver, search_term, retries=3):
+    """Load search page with retry on failure."""
     params = urlencode({"search": search_term})
-    url = f"{JOBS_BASE_URL}?{params}"
-    log.info("Loading: %s", url)
-    driver.get(url)
-    return wait_for_react(driver)
+    url    = f"{JOBS_BASE_URL}?{params}"
+
+    for attempt in range(1, retries + 1):
+        try:
+            log.info("Loading (attempt %d/%d): %s", attempt, retries, url)
+            driver.get(url)
+            h = wait_for_react(driver)
+            if h > 0:
+                return h
+            log.warning("Empty page on attempt %d - waiting 15s before retry", attempt)
+            time.sleep(15)
+        except Exception as e:
+            log.warning("Load error attempt %d: %s", attempt, e)
+            time.sleep(15)
+
+    log.warning("All %d attempts failed for '%s'", retries, search_term)
+    return 0
 
 def scroll_all(driver):
     time.sleep(1)
@@ -237,11 +267,33 @@ def parse_jobs_from_page(driver, seen_emails, cc_secret):
     log.info("Emails on page: %d", body_text.count("@"))
 
     lines = [l.strip() for l in body_text.split('\n') if l.strip()]
+
+    # ── Noise tokens that appear inline on hiring42 job cards ───────────────
+    INLINE_NOISE = re.compile(
+        r'^(C2C|W2|1099|ALL|REMOTE|ONSITE|HYBRID|REMOTE\/ONSITE HYBRID'
+        r'|EXP N\/A|\d+[\-\s]?\d*\s*YRS?|US CITI\w*|H1B|GREEN CARD'
+        r'|OPT|CPT|GC|USC|ACTIVE|SCORE.*|Score.*)$',
+        re.IGNORECASE
+    )
+
+    # ── Split page into per-job blocks ───────────────────────────────────────
+    # Each block starts right after a "Posted:" line from the PREVIOUS block,
+    # i.e. collect lines until we hit the NEXT "Posted:" line.
+    # Layout per job card (hiring42):
+    #   <Job Title>
+    #   <tag> <tag> ...   (C2C / W2 / ONSITE / ALL / N YRS)
+    #   <City, ST>
+    #   <email>
+    #   Posted: Mmm DD, YY, HH:MM am/pm    ← block boundary
+    #   Score: X.XX
+    #   ACTIVE
+
     job_blocks = []
     current = []
     for line in lines:
         current.append(line)
-        if line.startswith("Posted:"):
+        # "Posted:" marks the END of a job card
+        if re.match(r'^Posted:', line, re.IGNORECASE):
             job_blocks.append(current[:])
             current = []
 
@@ -249,8 +301,12 @@ def parse_jobs_from_page(driver, seen_emails, cc_secret):
 
     for block in job_blocks:
         block_text = '\n'.join(block)
+
+        # Must be posted today or yesterday
         if not is_posted_recently(block_text):
             continue
+
+        # Must have an email
         emails_found = email_pattern.findall(block_text)
         if not emails_found:
             continue
@@ -260,42 +316,44 @@ def parse_jobs_from_page(driver, seen_emails, cc_secret):
         if any(skip in email_addr for skip in SKIP_EMAILS):
             continue
 
-        # ── Title selection (fixed) ──────────────────────────────────────────
+        # ── Title: first meaningful line in the block ────────────────────────
+        # hiring42 layout always puts the job title as the FIRST line of the
+        # card, so we scan from the top and take the first line that:
+        #   - is not a noise token / tag
+        #   - is not a location "City, ST"
+        #   - is not the Posted / Score line
+        #   - is not an email address
+        #   - passes is_relevant_title()
         title = None
         for line in block:
-            # Skip known UI / noise lines
+            if not line:
+                continue
             if line.lower() in SKIP_LINES:
                 continue
-            if line.startswith("Posted:") or line.startswith("Score:"):
+            if re.match(r'^(Posted:|Score:)', line, re.IGNORECASE):
                 continue
             if "@" in line:
                 continue
-            # Skip visa / work-auth / experience tokens
-            if re.match(
-                r'^(C2C|W2|1099|ALL|REMOTE|ONSITE|HYBRID|REMOTE\/ONSITE HYBRID'
-                r'|EXP N\/A|\d+[\-\s]?\d*\s*YRS?|US CITI\w*|H1B|GREEN CARD'
-                r'|OPT|CPT|GC|USC|ACTIVE)$',
-                line, re.IGNORECASE
-            ):
+            if INLINE_NOISE.match(line):
                 continue
-            # Skip "City, ST" location lines
-            if re.match(r'^[A-Za-z\s\.]+,\s*[A-Z]{2}$', line):
+            # "City, ST" pattern
+            if re.match(r'^[A-Za-z\s\.\-]+,\s*[A-Z]{2}$', line):
                 continue
-            # Skip UI/promo garbage
             if is_bad_title(line):
                 log.info("  SKIP bad title: %s", line[:60])
                 continue
-            # ── NEW: only accept lines with a relevant tech keyword ──────────
-            if not is_relevant_title(line):
-                log.info("  SKIP irrelevant title: %s", line[:60])
-                continue
-            title = line
-            break
+            # Accept if relevant keyword present
+            if is_relevant_title(line):
+                title = line
+                break
+            # If first non-noise line has NO keyword it's probably an
+            # unrelated role — skip the whole block
+            log.info("  SKIP irrelevant title: %s", line[:60])
+            break   # don't keep scanning; move to next block
 
-        # Fallback — use default rather than garbage subject
         if not title:
-            title = "DevOps / Cloud Engineer"
-            log.info("  FALLBACK title used for: %s", email_addr)
+            log.info("  NO relevant title found for: %s", email_addr)
+            continue   # skip entirely — don't send with a garbage subject
 
         seen_emails.add(email_addr)
         jobs.append({"title": title, "email": email_addr, "cc_secret": cc_secret})
