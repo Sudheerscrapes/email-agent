@@ -1,0 +1,37 @@
+﻿name: AI Email Agent - Hiring42 Scraper
+
+on:
+  schedule:
+    - cron: '*/15 13-23 * * *'
+    - cron: '*/15 0-23 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+
+      - name: Install dependencies
+        run: pip install pytz selenium webdriver-manager
+
+      - name: Run Hiring42 Agent
+        env:
+          SMTP_EMAIL: ${{ secrets.SMTP_EMAIL }}
+          SMTP_APP_PASSWORD: ${{ secrets.SMTP_APP_PASSWORD }}
+          CC_DEVOPS: ${{ secrets.CC_DEVOPS }}
+          CC_CLOUD: ${{ secrets.CC_CLOUD }}
+          CC_SRE: ${{ secrets.CC_SRE }}
+        run: python agent_hiring42.py
