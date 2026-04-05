@@ -1,4 +1,4 @@
-﻿import os, base64, logging, re, smtplib, time, json
+import os, base64, logging, re, smtplib, time, json
 from pathlib import Path
 from datetime import datetime, date, time as dtime, timedelta
 from email.mime.multipart import MIMEMultipart
@@ -25,8 +25,8 @@ def get_today_date():
 def get_valid_posted_strings():
     today = datetime.now()
     yesterday = datetime.now() - timedelta(days=1)
-    today_str = "Posted: " + today.strftime("%b %d, %y").replace(" 0", " ")
-    yesterday_str = "Posted: " + yesterday.strftime("%b %d, %y").replace(" 0", " ")
+    today_str = "Posted: " + today.strftime("%b %d, %y")
+    yesterday_str = "Posted: " + yesterday.strftime("%b %d, %y")
     return [today_str, yesterday_str]
 
 def is_posted_recently(card_text):
@@ -87,7 +87,7 @@ ROLES = [
         "keywords": [
             "devops engineer","sr. devops","sr devops","senior devops",
             "lead devops","devsecops","dev ops","ci/cd engineer",
-            "build and release","release engineer","pipeline engineer","devops ai engineer",
+            "build and release","release engineer","pipeline engineer","devops ai engineer","sr. devops lead","sr devops lead","devops engineer \(aws\)","devops engineer- level","devops lead","aws devops engineer",
         ],
         "resume_file": "resume_lingaraju_b64.txt",
         "cc_secret": "CC_DEVOPS",
@@ -367,3 +367,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
