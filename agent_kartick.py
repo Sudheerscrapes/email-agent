@@ -1,4 +1,4 @@
-﻿import os, base64, logging, re, smtplib, time, json
+import os, base64, logging, re, smtplib, time, json
 from pathlib import Path
 from datetime import datetime, date, time as dtime
 import imaplib
@@ -82,6 +82,40 @@ Recruitment Manager
 
 www.adeptscripts.com"""
 
+# ---------------------------------------------------------------------------
+# NEGATIVE FILTER - subjects containing these words are ALWAYS skipped
+# even if they also contain a role keyword like "integration developer"
+# ---------------------------------------------------------------------------
+SKIP_SUBJECT_KEYWORDS = [
+    "dell boomi",
+    "boomi",
+    "workday",
+    "informatica",
+    "tibco",
+    "talend",
+    "snaplogic",
+    "jitterbit",
+    "azure logic apps",
+    "oracle integration cloud",
+    "oic developer",
+    "biztalk",
+    "webmethods",
+    "web methods",
+    "netsuite",
+    "sap pi",
+    "sap po",
+    "sap cpi",
+    "ibm integration",
+    "ibm mq developer",
+    "mulesoft qa",
+    "mulesoft test",
+    "gwcc",
+    "gcpw",
+]
+
+# ---------------------------------------------------------------------------
+# ROLES - Integration Developer now requires MuleSoft explicitly in subject
+# ---------------------------------------------------------------------------
 ROLES = [
     {
         "name": "Lead MuleSoft Developer",
@@ -94,6 +128,8 @@ ROLES = [
             "mulesoft tech lead",
             "principal mulesoft developer",
             "mulesoft lead",
+            "mulesoft architect",
+            "lead mule developer",
         ],
         "resume_file": "resume_kartick_b64.txt",
         "cc_secret": "CC_KARTICK",
@@ -112,23 +148,27 @@ ROLES = [
             "mulesoft api developer",
             "mule4 developer",
             "mule 4 developer",
+            "mulesoft consultant",
+            "mule consultant",
         ],
         "resume_file": "resume_kartick_b64.txt",
         "cc_secret": "CC_KARTICK",
         "reply": SHARED_REPLY,
     },
     {
-        "name": "Integration Developer",
+        "name": "MuleSoft Integration Developer",
         "keywords": [
-            "integration developer",
-            "integration engineer",
-            "api integration developer",
-            "middleware developer",
-            "middleware engineer",
+            # Only integration/middleware roles that EXPLICITLY mention MuleSoft
             "mulesoft integration",
             "mulesoft middleware",
-            "esb developer",
-            "esb engineer",
+            "integration developer mulesoft",
+            "integration engineer mulesoft",
+            "api developer mulesoft",
+            "esb developer mulesoft",
+            "mulesoft esb",
+            "mulesoft api",
+            "anypoint mq",
+            "anypoint platform",
         ],
         "resume_file": "resume_kartick_b64.txt",
         "cc_secret": "CC_KARTICK",
@@ -275,6 +315,11 @@ def fetch_matching_emails():
                 log.warning("Could not extract sender email from: %s", sender)
                 continue
 
+            # DEDUP CHECK AT FETCH TIME - skip before even queuing
+            if sender_addr in replied_senders:
+                log.info("DEDUP SKIP (already replied today): %s", sender_addr)
+                continue
+
             emails.append({
                 "uid": uid_str,
                 "message_id": message_id,
@@ -295,10 +340,20 @@ def fetch_matching_emails():
 
 def detect_role(email):
     subject = email["subject"].lower()
+
+    # Step 1: Block subjects with irrelevant/competing technology keywords
+    for bad_kw in SKIP_SUBJECT_KEYWORDS:
+        if bad_kw in subject:
+            log.info("BLOCKED - irrelevant tech keyword '%s' in: %s", bad_kw, subject[:60])
+            return None
+
+    # Step 2: Match against role keywords
     for role in ROLES:
         if any(kw in subject for kw in role["keywords"]):
-            log.info("Matched: %s", role["name"])
+            log.info("Matched role: %s", role["name"])
             return role
+
+    log.info("No matching role for: %s", subject[:60])
     return None
 
 def get_resume(role):
