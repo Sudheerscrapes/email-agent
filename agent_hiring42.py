@@ -1,6 +1,6 @@
-import os, base64, logging, re, json, time, smtplib
+import os, base64, logging, re, json, time, smtplib, sys
 from pathlib import Path
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timezone, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -56,7 +56,7 @@ PROFILES = [
             "devops", "devsecops", "dev ops",
             "ci/cd", "build and release", "release engineer", "pipeline engineer",
         ],
-        "cc_secret":  "CC_DEVOPS",
+        "cc_secret":   "CC_DEVOPS",
         "resume_file": "resume_lingaraju_b64.txt",
     },
     {
@@ -65,26 +65,28 @@ PROFILES = [
             "cloud engineer", "cloud architect", "cloud infrastructure",
             "aws", "azure", "gcp", "platform engineer", "infrastructure engineer",
         ],
-        "cc_secret":  "CC_CLOUD",
+        "cc_secret":   "CC_CLOUD",
         "resume_file": "resume_lingaraju_b64.txt",
     },
     {
         "name": "Site Reliability Engineer",
         "keywords": ["site reliability", "sre", "reliability engineer"],
-        "cc_secret":  "CC_SRE",
+        "cc_secret":   "CC_SRE",
         "resume_file": "resume_lingaraju_b64.txt",
     },
     {
         "name": "Kubernetes / Container Engineer",
         "keywords": ["kubernetes", "k8s", "docker", "openshift", "container engineer"],
-        "cc_secret":  "CC_DEVOPS",
+        "cc_secret":   "CC_DEVOPS",
         "resume_file": "resume_lingaraju_b64.txt",
     },
     {
         "name": "Terraform / Automation Engineer",
-        "keywords": ["terraform", "ansible", "argocd", "gitops",
-                     "infrastructure automation", "jenkins", "gitlab", "helm"],
-        "cc_secret":  "CC_DEVOPS",
+        "keywords": [
+            "terraform", "ansible", "argocd", "gitops",
+            "infrastructure automation", "jenkins", "gitlab", "helm",
+        ],
+        "cc_secret":   "CC_DEVOPS",
         "resume_file": "resume_lingaraju_b64.txt",
     },
 ]
@@ -104,32 +106,29 @@ def get_profile_for_title(title):
     return None
 
 # =============================================================================
-#  DATE FILTER
+#  DATE HELPERS  —  use LOCAL time (works correctly in IST / any timezone)
 # =============================================================================
-def get_today_utc_range():
-    """Return (start_ts, end_ts) for today in UTC."""
-    now   = datetime.now(timezone.utc)
-    start = int(datetime(now.year, now.month, now.day, tzinfo=timezone.utc).timestamp())
+def get_local_day_range(year, month, day):
+    """
+    Return (start_ts, end_ts) for a calendar date in LOCAL system time.
+    e.g. on IST machine: Apr 06 = 1775433600 to 1775520000
+    """
+    start = int(datetime(year, month, day, 0, 0, 0).timestamp())
     end   = start + 86400
     return start, end
 
-def get_date_utc_range(year, month, day):
-    """Return (start_ts, end_ts) for a specific date in UTC."""
-    start = int(datetime(year, month, day, tzinfo=timezone.utc).timestamp())
-    end   = start + 86400
-    return start, end
+def get_today_local_range():
+    d = date.today()
+    return get_local_day_range(d.year, d.month, d.day)
 
-def ts_to_str(ts):
-    return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%b %d, %Y %H:%M UTC")
+def ts_to_local_str(ts):
+    return datetime.fromtimestamp(ts).strftime("%b %d, %Y %H:%M")
 
 # =============================================================================
-#  API FETCH  —  paginate through ALL jobs
+#  API FETCH — paginate correctly
+#  FIX: pass last_evaluated_key exactly as received from API response
 # =============================================================================
 def fetch_all_jobs():
-    """
-    Fetch every active job from hiring42 API using pagination.
-    Returns list of all job dicts.
-    """
     all_items          = []
     last_evaluated_key = None
     page               = 1
@@ -137,35 +136,46 @@ def fetch_all_jobs():
     while True:
         payload = {
             "context":            "all_jobs",
-            "last_evaluated_key": last_evaluated_key,
+            "last_evaluated_key": last_evaluated_key,   # None on first call, dict on next
             "status":             "active",
             "uid":                None,
         }
-        log.info("Fetching page %d ...", page)
+
+        log.info("Fetching page %d (last_key=%s) ...", page,
+                 last_evaluated_key.get("id") if last_evaluated_key else "null")
         try:
             resp = requests.post(API_URL, json=payload, headers=HEADERS, timeout=30)
             resp.raise_for_status()
             data = resp.json()
+        except requests.exceptions.HTTPError as e:
+            log.error("API HTTP error on page %d: %s", page, e)
+            log.error("Response body: %s", e.response.text[:500] if e.response else "N/A")
+            break
         except Exception as e:
             log.error("API error on page %d: %s", page, e)
             break
 
         items = data.get("Items", [])
-        all_items.extend(items)
-        log.info("  Page %d: %d items (total so far: %d)", page, len(items), len(all_items))
-
-        last_evaluated_key = data.get("LastEvaluatedKey")
-        if not last_evaluated_key:
-            log.info("No more pages. Done fetching.")
+        if not items:
+            log.info("Empty page %d — done.", page)
             break
 
-        page     += 1
-        time.sleep(0.3)   # be polite to the API
+        all_items.extend(items)
+        log.info("  Page %d: %d items (total: %d)", page, len(items), len(all_items))
+
+        # Use exactly what the API returned as the next page key
+        last_evaluated_key = data.get("LastEvaluatedKey")
+        if not last_evaluated_key:
+            log.info("No more pages.")
+            break
+
+        page    += 1
+        time.sleep(0.5)
 
     return all_items
 
 # =============================================================================
-#  FILTER JOBS BY DATE
+#  FILTER BY DATE
 # =============================================================================
 def filter_by_date(jobs, start_ts, end_ts):
     return [j for j in jobs if start_ts <= j.get("ts", 0) < end_ts]
@@ -173,7 +183,7 @@ def filter_by_date(jobs, start_ts, end_ts):
 # =============================================================================
 #  DEDUP
 # =============================================================================
-def get_today_date():
+def get_today_date_str():
     return str(date.today())
 
 def load_daily_dedup():
@@ -181,21 +191,25 @@ def load_daily_dedup():
         try:
             with open(DEDUP_FILE, "r", encoding="utf-8-sig") as f:
                 data = json.load(f)
-                if data.get("date") == get_today_date():
+                if data.get("date") == get_today_date_str():
                     senders    = set(data.get("senders", []))
                     send_count = data.get("send_count", 0)
                     log.info("TODAY: %d already sent, %d/%d limit",
                              len(senders), send_count, MAX_DAILY_SENDS)
                     return senders, send_count
                 else:
-                    log.info("NEW DAY - Resetting dedup")
+                    log.info("NEW DAY — Resetting dedup")
                     return set(), 0
         except Exception as e:
             log.warning("Could not load dedup: %s", e)
     return set(), 0
 
 def save_daily_dedup(senders, send_count=0):
-    data = {"date": get_today_date(), "senders": sorted(list(senders)), "send_count": send_count}
+    data = {
+        "date":       get_today_date_str(),
+        "senders":    sorted(list(senders)),
+        "send_count": send_count,
+    }
     with open(DEDUP_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
     log.info("SAVED: %d senders, %d sent today", len(senders), send_count)
@@ -256,7 +270,8 @@ def send_email(job, smtp_server):
     part = MIMEBase("application", "vnd.openxmlformats-officedocument.wordprocessingml.document")
     part.set_payload(resume_bytes)
     encoders.encode_base64(part)
-    part.add_header("Content-Disposition", 'attachment; filename="Resume_Lingaraju_Modhala.docx"')
+    part.add_header("Content-Disposition",
+                    'attachment; filename="Resume_Lingaraju_Modhala.docx"')
     msg.attach(part)
 
     recipients = [to_email]
@@ -283,57 +298,59 @@ def log_sent(job):
         ))
 
 # =============================================================================
-#  MAIN  —  fetch all → filter today → match → send immediately
+#  SMTP HELPERS
 # =============================================================================
-def main():
-    log.info("=" * 70)
-    log.info("AI Email Agent - Lingaraju Modhala (hiring42 API)")
-    log.info("=" * 70)
+def smtp_connect_safe():
+    try:
+        s = connect_smtp()
+        log.info("SMTP connected")
+        return s
+    except Exception as e:
+        log.error("SMTP failed: %s", e)
+        return None
 
-    required = ["SMTP_EMAIL", "SMTP_APP_PASSWORD"]
-    missing  = [r for r in required if not os.environ.get(r)]
-    if missing:
-        log.error("Missing env vars: %s", ", ".join(missing))
-        return
-
-    replied_senders, daily_send_count = load_daily_dedup()
-    if daily_send_count >= MAX_DAILY_SENDS:
-        log.warning("Daily limit already reached.")
-        return
-
-    # ── Fetch ALL jobs from API ───────────────────────────────────────────
+# =============================================================================
+#  CORE LOGIC
+# =============================================================================
+def run_agent(start_ts, end_ts, send_emails=True):
+    """
+    Fetch all jobs, filter by date range, match profiles,
+    optionally send emails immediately on each match.
+    """
     log.info("Fetching all jobs from API ...")
     all_jobs = fetch_all_jobs()
     log.info("Total active jobs in API: %d", len(all_jobs))
 
-    # ── Filter to today only ──────────────────────────────────────────────
-    start_ts, end_ts = get_today_utc_range()
-    today_jobs       = filter_by_date(all_jobs, start_ts, end_ts)
-    log.info("Jobs posted today: %d", len(today_jobs))
+    date_jobs = filter_by_date(all_jobs, start_ts, end_ts)
+    log.info("Jobs in date range: %d", len(date_jobs))
 
-    if not today_jobs:
-        log.info("No jobs posted today. Exiting.")
-        return
+    if not date_jobs:
+        log.info("No jobs found in date range. Exiting.")
+        return []
 
-    # ── Print all today's jobs ────────────────────────────────────────────
+    # Print ALL jobs in range
     log.info("-" * 70)
-    log.info("ALL JOBS POSTED TODAY:")
-    for j in today_jobs:
-        log.info("  [%s] %s | %s | %s", ts_to_str(j["ts"]), j["title"], j.get("loc",""), j["uid"])
+    log.info("ALL JOBS IN RANGE:")
+    for j in date_jobs:
+        log.info("  [%s] %s | %s | %s",
+                 ts_to_local_str(j["ts"]), j["title"], j.get("loc", ""), j["uid"])
     log.info("-" * 70)
 
-    # ── Connect SMTP ──────────────────────────────────────────────────────
-    try:
-        smtp_server = connect_smtp()
-        log.info("SMTP connected")
-    except Exception as e:
-        log.error("SMTP failed: %s", e)
-        return
+    if not send_emails:
+        return date_jobs
+
+    # ── Send ─────────────────────────────────────────────────────────────
+    replied_senders, daily_send_count = load_daily_dedup()
+    if daily_send_count >= MAX_DAILY_SENDS:
+        log.warning("Daily limit already reached.")
+        return date_jobs
+
+    smtp_server = smtp_connect_safe()
+    if not smtp_server:
+        return date_jobs
 
     sent = 0
-
-    # ── Match & send immediately ──────────────────────────────────────────
-    for job in today_jobs:
+    for job in date_jobs:
         if daily_send_count >= MAX_DAILY_SENDS:
             log.warning("DAILY LIMIT REACHED.")
             break
@@ -341,16 +358,12 @@ def main():
         email_addr = job.get("uid", "").lower()
         title      = job.get("title", "")
 
-        # Skip own / bad emails
         if not email_addr or any(s in email_addr for s in SKIP_EMAILS):
             continue
-
-        # Skip already sent today
         if email_addr in replied_senders:
             log.info("SKIP (already sent): %s", email_addr)
             continue
 
-        # Match profile
         profile = get_profile_for_title(title)
         if not profile:
             log.info("NO MATCH: %s | %s", title, email_addr)
@@ -361,7 +374,7 @@ def main():
         job["resume_file"]  = profile["resume_file"]
 
         log.info("MATCH [%s]: %s -> %s", profile["name"], title, email_addr)
-        log.info("SENDING NOW [%d/%d] ...", daily_send_count + 1, MAX_DAILY_SENDS)
+        log.info("SENDING NOW [%d/%d]", daily_send_count + 1, MAX_DAILY_SENDS)
 
         try:
             send_email(job, smtp_server)
@@ -382,64 +395,68 @@ def main():
     except Exception:
         pass
 
-    log.info("=" * 70)
     log.info("Done - Sent: %d | Daily total: %d/%d", sent, daily_send_count, MAX_DAILY_SENDS)
-    log.info("=" * 70)
-
+    return date_jobs
 
 # =============================================================================
-#  BONUS: run in "view only" mode to just see today's jobs without sending
-#  Usage:  python agent_hiring42_api.py --view
-#          python agent_hiring42_api.py --view --date 2026-04-03
+#  ENTRY POINT
+#
+#  Normal run (today, send emails):
+#      python agent_hiring42_api.py
+#
+#  View only — today (no emails):
+#      python agent_hiring42_api.py --view
+#
+#  View specific date (no emails):
+#      python agent_hiring42_api.py --view --date 2026-04-03
+#
+#  Run agent on specific date (send emails):
+#      python agent_hiring42_api.py --date 2026-04-06
 # =============================================================================
 if __name__ == "__main__":
-    import sys
+    view_only   = "--view" in sys.argv
+    target_date = None
 
-    if "--view" in sys.argv:
-        # Find --date YYYY-MM-DD argument
-        target_date = None
-        if "--date" in sys.argv:
-            idx = sys.argv.index("--date")
-            if idx + 1 < len(sys.argv):
-                try:
-                    y, m, d   = sys.argv[idx + 1].split("-")
-                    target_date = (int(y), int(m), int(d))
-                except Exception:
-                    print("Invalid date format. Use: --date YYYY-MM-DD")
-                    sys.exit(1)
+    if "--date" in sys.argv:
+        idx = sys.argv.index("--date")
+        if idx + 1 < len(sys.argv):
+            try:
+                y, m, d     = sys.argv[idx + 1].split("-")
+                target_date = (int(y), int(m), int(d))
+            except Exception:
+                print("Invalid date. Use: --date YYYY-MM-DD")
+                sys.exit(1)
 
-        if target_date:
-            start_ts, end_ts = get_date_utc_range(*target_date)
-            label = f"{target_date[0]}-{target_date[1]:02d}-{target_date[2]:02d}"
-        else:
-            start_ts, end_ts = get_today_utc_range()
-            label = "TODAY"
+    if target_date:
+        start_ts, end_ts = get_local_day_range(*target_date)
+        label = f"{target_date[0]}-{target_date[1]:02d}-{target_date[2]:02d}"
+    else:
+        start_ts, end_ts = get_today_local_range()
+        label = "TODAY (" + str(date.today()) + ")"
 
+    log.info("=" * 70)
+    log.info("AI Email Agent - Lingaraju Modhala (hiring42 API)")
+    log.info("Date range: %s  [%d -> %d]", label, start_ts, end_ts)
+    log.info("Mode: %s", "VIEW ONLY" if view_only else "SEND EMAILS")
+    log.info("=" * 70)
+
+    jobs = run_agent(start_ts, end_ts, send_emails=not view_only)
+
+    # ── Summary table ─────────────────────────────────────────────────────
+    if jobs:
+        matched = [(j, get_profile_for_title(j["title"])) for j in jobs]
         print(f"\n{'='*70}")
-        print(f"  HIRING42 — ALL JOBS FOR: {label}")
-        print(f"{'='*70}\n")
-
-        all_jobs   = fetch_all_jobs()
-        jobs       = filter_by_date(all_jobs, start_ts, end_ts)
-        matched    = [(j, get_profile_for_title(j["title"])) for j in jobs]
-
-        print(f"Total active jobs in API : {len(all_jobs)}")
-        print(f"Jobs for {label}         : {len(jobs)}")
-        print(f"Matching your profiles   : {sum(1 for _,p in matched if p)}")
-        print()
-
-        print(f"{'#':<4} {'TIME (UTC)':<22} {'TITLE':<45} {'EMAIL':<38} {'LOC':<20} PROFILE")
-        print("-" * 160)
+        print(f"  TOTAL JOBS: {len(jobs)}  |  MATCHED: {sum(1 for _,p in matched if p)}")
+        print(f"{'='*70}")
+        print(f"\n{'#':<4} {'TIME':<20} {'TITLE':<45} {'EMAIL':<38} {'LOC':<20} PROFILE")
+        print("-" * 155)
         for i, (j, profile) in enumerate(matched, 1):
-            pname = profile["name"] if profile else "--- no match ---"
-            print(f"{i:<4} {ts_to_str(j['ts']):<22} {j['title'][:44]:<45} "
+            pname = profile["name"] if profile else "---"
+            print(f"{i:<4} {ts_to_local_str(j['ts']):<20} {j['title'][:44]:<45} "
                   f"{j['uid']:<38} {j.get('loc',''):<20} {pname}")
 
-        # Save to JSON
-        out = f"logs/jobs_{label}.json"
+        # Save JSON
+        out = f"logs/jobs_{label.split()[0]}.json"
         with open(out, "w", encoding="utf-8") as f:
             json.dump(jobs, f, indent=2)
         print(f"\n✅  Saved to {out}")
-
-    else:
-        main()
