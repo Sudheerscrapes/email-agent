@@ -5,20 +5,52 @@ on:
     - cron: '*/15 13-22 * * *'   # 6:30 PM to 4:29 AM IST
     - cron: '0,15,30 23 * * *'   # 4:30 AM IST cutoff (last 3 runs)
   workflow_dispatch:
+
 jobs:
   run-agent:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      - name: Check IST operating window (6:30 PM – 4:30 AM)
+        id: time_check
+        run: |
+          python3 - <<'EOF'
+          from datetime import datetime, timezone, timedelta
+          import os
+
+          IST = timezone(timedelta(hours=5, minutes=30))
+          now = datetime.now(IST)
+          total_minutes = now.hour * 60 + now.minute
+
+          # 6:30 PM IST = 1110 min | 4:30 AM IST = 270 min (crosses midnight)
+          in_window = total_minutes >= 1110 or total_minutes < 270
+
+          print(f"Current IST time : {now.strftime('%Y-%m-%d %H:%M:%S')}")
+          print(f"In operating window: {in_window}")
+
+          if not in_window:
+              print("Outside 6:30 PM – 4:30 AM IST window. Skipping all steps.")
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"in_window={'true' if in_window else 'false'}\n")
+          EOF
+
       - name: Checkout code
+        if: steps.time_check.outputs.in_window == 'true'
         uses: actions/checkout@v4
+
       - name: Setup Python
+        if: steps.time_check.outputs.in_window == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
       - name: Install dependencies
+        if: steps.time_check.outputs.in_window == 'true'
         run: pip install --no-cache-dir -r requirements.txt
+
       - name: Run Email Agent
+        if: steps.time_check.outputs.in_window == 'true'
         env:
           IMAP_EMAIL:          ${{ secrets.IMAP_EMAIL }}
           IMAP_APP_PASSWORD:   ${{ secrets.IMAP_APP_PASSWORD }}
@@ -30,6 +62,7 @@ jobs:
           CC_CLOUD:            ${{ secrets.CC_CLOUD }}
           CC_SRE:              ${{ secrets.CC_SRE }}
         run: python agent.py
+
       - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v4

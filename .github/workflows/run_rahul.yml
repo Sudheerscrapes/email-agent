@@ -1,29 +1,53 @@
 name: Run Email Agent - Rahul (Data Engineer)
-
 on:
   schedule:
-    - cron: '0 13 * * *'   # 6:30 PM IST = 13:00 UTC  (runs once daily)
-    - cron: '0 16 * * *'   # 9:30 PM IST = 16:00 UTC  (second run)
-    - cron: '0 20 * * *'   # 1:30 AM IST = 20:00 UTC  (third run)
-  workflow_dispatch:         # Manual trigger from GitHub UI
+    # Every 15 minutes from 13:00 UTC to 22:30 UTC (6:30 PM IST to 4:00 AM IST)
+    - cron: '*/15 13-22 * * *'   # Covers 13:00–22:59 UTC
+    - cron: '0,15 23 * * *'      # Extra: 23:00 & 23:15 UTC (safety buffer, skipped by time check)
+  workflow_dispatch:
 
 jobs:
   run-rahul-agent:
     runs-on: ubuntu-latest
-
     steps:
+      - name: Check if within IST operating window (6:30 PM – 4:00 AM)
+        id: time_check
+        run: |
+          python3 - <<'EOF'
+          from datetime import datetime, timezone, timedelta
+          IST = timezone(timedelta(hours=5, minutes=30))
+          now = datetime.now(IST)
+          total_minutes = now.hour * 60 + now.minute
+
+          # 6:30 PM IST = 1110 min, 4:00 AM IST next day = 240 min (crosses midnight)
+          in_window = total_minutes >= 1110 or total_minutes < 240
+
+          print(f"Current IST time: {now.strftime('%H:%M')}")
+          print(f"In operating window: {in_window}")
+
+          if not in_window:
+              print("Outside operating window. Skipping.")
+          import os
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"in_window={'true' if in_window else 'false'}\n")
+          EOF
+
       - name: Checkout code
+        if: steps.time_check.outputs.in_window == 'true'
         uses: actions/checkout@v3
 
       - name: Set up Python
+        if: steps.time_check.outputs.in_window == 'true'
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
       - name: Install dependencies
+        if: steps.time_check.outputs.in_window == 'true'
         run: pip install pytz
 
       - name: Run Rahul Email Agent
+        if: steps.time_check.outputs.in_window == 'true'
         env:
           IMAP_EMAIL: ${{ secrets.IMAP_EMAIL }}
           IMAP_APP_PASSWORD: ${{ secrets.IMAP_APP_PASSWORD }}
