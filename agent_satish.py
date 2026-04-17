@@ -9,13 +9,15 @@ FIXES:
 2. Dedup saved IMMEDIATELY after each send (not at the end)
 3. UTF-8-sig fix for dedup file (BOM handling)
 4. Skips own sent emails
-5. Skips any email with subject starting with "Re:"
+5. REMOVED "Re:" skip - recruiters use RE: in fresh emails
 6. SCAN from sudheeritservices1@gmail.com (Gmail IMAP)
 7. SEND from sudheer@adeptscripts.com (Zoho SMTP)
 8. Daily send cap (450) to avoid limit errors
 9. SINGLE SMTP connection reused for all emails
 10. 5 second delay between sends (avoids spam detection)
 11. certutil base64 header strip + padding fix
+12. BROAD IMAP search: only ".net" and "dot net" - catches ALL variants
+13. REMOVED UNSEEN filter - catches read and unread emails
 """
 
 import os, base64, logging, re, smtplib, time, json
@@ -127,6 +129,8 @@ ROLES = [
             ".net lead developer",
             ".net tech lead",
             "principal .net developer",
+            "lead dot net",
+            "senior dot net",
         ],
         "resume_file": "resume_satish_b64.txt",
         "cc_secret": "CC_SATISH",
@@ -148,6 +152,9 @@ ROLES = [
             ".net core developer",
             ".net core engineer",
             "dotnet core developer",
+            "dot net engineer",
+            "(.net developer)",
+            "(.net)",
         ],
         "resume_file": "resume_satish_b64.txt",
         "cc_secret": "CC_SATISH",
@@ -168,6 +175,8 @@ ROLES = [
             "asp.net mvc developer",
             ".net mvc developer",
             "mvc developer",
+            "azure dot net",
+            "azure/.net",
         ],
         "resume_file": "resume_satish_b64.txt",
         "cc_secret": "CC_SATISH",
@@ -184,12 +193,23 @@ ROLES = [
             "angular .net developer",
             ".net react developer",
             "react .net developer",
+            "full stack dot net",
+            "fullstack dot net",
         ],
         "resume_file": "resume_satish_b64.txt",
         "cc_secret": "CC_SATISH",
         "reply": SHARED_REPLY,
     },
 ]
+
+# Fallback role: if subject has .net or dot net but no keyword matched above
+FALLBACK_ROLE = {
+    "name": ".NET Developer (General)",
+    "keywords": [],
+    "resume_file": "resume_satish_b64.txt",
+    "cc_secret": "CC_SATISH",
+    "reply": SHARED_REPLY,
+}
 
 REPLIED_LABEL = "AutoReplied_Satish"
 
@@ -211,7 +231,6 @@ def extract_address(s):
     return (m.group(1) if m else s).strip().lower()
 
 def connect_imap():
-    # Gmail IMAP for scanning
     mail = imaplib.IMAP4_SSL("imap.gmail.com")
     mail.login(os.environ["IMAP_EMAIL"], os.environ["IMAP_APP_PASSWORD"])
     mail.select("inbox")
@@ -266,19 +285,23 @@ def fetch_matching_emails():
     replied_senders, send_count = load_daily_dedup()
     today = datetime.now().strftime("%d-%b-%Y")
 
+    # ── BROAD SEARCH: just 2 queries catch ALL .net and dot net variants ──
     all_uid_set = set()
-    for role in ROLES:
-        for kw in role["keywords"]:
-            try:
-                search_str = '(UNSEEN SINCE "' + today + '" SUBJECT "' + kw + '")'
-                _, msg_ids = mail.search(None, search_str)
+    search_queries = [
+        'SINCE "' + today + '" SUBJECT ".net"',
+        'SINCE "' + today + '" SUBJECT "dot net"',
+    ]
+    for q in search_queries:
+        try:
+            _, msg_ids = mail.search(None, q)
+            if msg_ids[0]:
                 for uid in msg_ids[0].split():
                     all_uid_set.add(uid)
-            except Exception:
-                pass
+        except Exception as e:
+            log.warning("Search failed for query '%s': %s", q, e)
 
     ids = list(all_uid_set)
-    log.info("Found %d matching unread emails today", len(ids))
+    log.info("Found %d matching emails today (.net + dot net)", len(ids))
 
     emails, seen_uids = [], set()
     for i, uid in enumerate(ids):
@@ -304,10 +327,6 @@ def fetch_matching_emails():
 
             subj_match = re.search(r"Subject:\s*(.+?)(?:\r?\n(?!\s)|\Z)", hdr_raw, re.IGNORECASE | re.DOTALL)
             subject = subj_match.group(1).strip().replace("\r\n", " ").replace("\n", " ") if subj_match else ""
-
-            if subject.lower().startswith("re:"):
-                log.info("Skipping - own reply thread: %s", subject[:50])
-                continue
 
             mid_match = re.search(r"Message-ID:\s*(.+)", hdr_raw, re.IGNORECASE)
             message_id = mid_match.group(1).strip() if mid_match else uid_str
@@ -351,10 +370,18 @@ def fetch_matching_emails():
 
 def detect_role(email):
     subject = email["subject"].lower()
+
+    # Check all roles by keyword
     for role in ROLES:
         if any(kw in subject for kw in role["keywords"]):
-            log.info("Matched: %s", role["name"])
+            log.info("Matched role: %s", role["name"])
             return role
+
+    # Fallback: if subject contains .net or dot net, still send
+    if ".net" in subject or "dot net" in subject:
+        log.info("Fallback match: %s", FALLBACK_ROLE["name"])
+        return FALLBACK_ROLE
+
     return None
 
 def get_resume(role):
@@ -382,10 +409,9 @@ def send_reply(email, role, server):
     to_email = extract_address(email["reply_to"] or email["sender"])
     cc_email = os.environ.get(role["cc_secret"], "")
 
-    if not email["subject"].lower().startswith("re:"):
-        subject = "Re: " + email["subject"]
-    else:
-        subject = email["subject"]
+    subject = email["subject"]
+    if not subject.lower().startswith("re:"):
+        subject = "Re: " + subject
 
     msg = MIMEMultipart()
     msg["From"] = smtp_email
@@ -497,7 +523,7 @@ def main():
 
             role = detect_role(email)
             if role is None:
-                log.info("No matching role - skipping")
+                log.info("No .net / dot net found in subject - skipping")
                 continue
 
             if daily_send_count >= MAX_DAILY_SENDS:
@@ -505,7 +531,7 @@ def main():
                 break
 
             matched += 1
-            log.info("SENDING REPLY... (%d/%d)", daily_send_count + 1, MAX_DAILY_SENDS)
+            log.info("SENDING REPLY... (%d/%d) | Role: %s", daily_send_count + 1, MAX_DAILY_SENDS, role["name"])
             send_reply(email, role, smtp_server)
             log_sent(email, role)
             mail = mark_as_replied(mail, email["uid"])
@@ -514,6 +540,7 @@ def main():
             sent_senders.add(sender_addr)
             daily_send_count += 1
 
+            # Save dedup immediately after every send
             save_daily_dedup(replied_senders, daily_send_count)
 
         except Exception as e:
