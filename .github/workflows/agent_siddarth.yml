@@ -1,0 +1,39 @@
+name: Agent Siddarth - Salesforce Developer
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'   # Every 15 minutes
+  workflow_dispatch:           # Manual trigger from Actions tab
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pytz
+
+      - name: Run Siddarth Email Agent
+        env:
+          IMAP_EMAIL: ${{ secrets.IMAP_EMAIL }}
+          IMAP_APP_PASSWORD: ${{ secrets.IMAP_APP_PASSWORD }}
+          SIDDARTH_SMTP_EMAIL: ${{ secrets.SIDDARTH_SMTP_EMAIL }}
+          SIDDARTH_SMTP_APP_PASSWORD: ${{ secrets.SIDDARTH_SMTP_APP_PASSWORD }}
+          CC_SIDDARTH: ${{ secrets.CC_SIDDARTH }}
+        run: python agent_siddarth.py
+
+      - name: Upload logs as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: siddarth-logs-${{ github.run_number }}
+          path: logs/
+          retention-days: 7
