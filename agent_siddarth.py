@@ -454,7 +454,10 @@ def get_resume(role):
 def send_reply(email, role, server):
     smtp_email = os.environ["SIDDARTH_SMTP_EMAIL"]  # sudheer@adeptscripts.com
     to_email = extract_address(email["reply_to"] or email["sender"])
-    cc_email = os.environ.get(role["cc_secret"], "")
+
+    # Support multiple CC emails (comma-separated in secret)
+    cc_raw = os.environ.get(role["cc_secret"], "")
+    cc_list = [c.strip() for c in cc_raw.split(",") if c.strip()]
 
     subject = email["subject"]
     if not subject.lower().startswith("re:"):
@@ -464,8 +467,8 @@ def send_reply(email, role, server):
     msg["From"] = smtp_email
     msg["To"] = to_email
     msg["Subject"] = subject
-    if cc_email:
-        msg["Cc"] = cc_email
+    if cc_list:
+        msg["Cc"] = ", ".join(cc_list)
 
     msg.attach(MIMEText(role["reply"], "plain"))
 
@@ -476,16 +479,14 @@ def send_reply(email, role, server):
     part.add_header("Content-Disposition", 'attachment; filename="Resume_Siddarth_Salesforce.docx"')
     msg.attach(part)
 
-    recipients = [to_email]
-    if cc_email:
-        recipients.append(cc_email)
+    recipients = [to_email] + cc_list
 
     server.sendmail(smtp_email, recipients, msg.as_string())
 
     log.info("Sent from : %s", smtp_email)
     log.info("Sent to   : %s", to_email)
-    if cc_email:
-        log.info("CCd       : %s", cc_email)
+    if cc_list:
+        log.info("CCd       : %s", ", ".join(cc_list))
 
     time.sleep(5)
 
