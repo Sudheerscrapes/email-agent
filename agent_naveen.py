@@ -1,22 +1,25 @@
 """
-AI Email Agent - Naveen (SAP SD Consultant)
-Scans: sudheeritservices1@gmail.com (IMAP)
-Sends: naveenkadiyalasapsd@gmail.com (SMTP)
-Replies to: SAP SD / OTC roles only
+AI Email Agent - Naveen Kumar Kadiyala (SAP SD / OTC / Logistics Consultant)
+Scans: sudheeritservices1@gmail.com (IMAP - Gmail)
+Sends: sudheer@adeptscripts.com (SMTP - Gmail)
+Replies to: SAP SD, OTC, Order-to-Cash, Pricing, Shipping, WM, LE roles
+REMOTE ONLY: On-site / hybrid / local roles are SKIPPED
 
 FIXES:
 1. Dedup checked FIRST before anything else
 2. Dedup saved IMMEDIATELY after each send (not at the end)
 3. UTF-8-sig fix for dedup file (BOM handling)
 4. Skips own sent emails
-5. Skips any email with subject starting with "Re:"
-6. SCAN from sudheeritservices1@gmail.com
-7. SEND from naveenkadiyalasapsd@gmail.com
-8. Daily send cap (450) to avoid Gmail 550 limit errors
-9. SINGLE SMTP connection reused for all emails (avoids Google block)
+5. REMOVED "Re:" skip - recruiters use RE: in fresh emails
+6. SCAN from sudheeritservices1@gmail.com (Gmail IMAP)
+7. SEND from sudheer@adeptscripts.com (Gmail SMTP)
+8. Daily send cap (450) to avoid limit errors
+9. SINGLE SMTP connection reused for all emails
 10. 5 second delay between sends (avoids spam detection)
-11. Blocklist for non-SD SAP roles (ABAP, FICO, Basis, etc.)
-12. certutil base64 header strip + padding fix
+11. certutil base64 header strip + padding fix
+12. BROAD IMAP search: "SAP" - catches ALL SAP variants
+13. REMOVED UNSEEN filter - catches read and unread emails
+14. REMOTE ONLY - skips onsite / hybrid / local roles
 """
 
 import os, base64, logging, re, smtplib, time, json
@@ -89,92 +92,238 @@ def is_within_run_window():
     return current_time >= start or current_time <= end
 
 # ══════════════════════════════════════════════════════════════════════════════
+# REMOTE ONLY - onsite/hybrid/local detection
+# ══════════════════════════════════════════════════════════════════════════════
+ONSITE_PATTERNS = [
+    r"\bonsite\b", r"\bon-site\b", r"\bon site\b",
+    r"\bhybrid\b",
+    r"\blocal\b", r"\blocals\b", r"\blocal only\b", r"\blocal candidate\b",
+    r"\bday.?1 onsite\b", r"\bday one onsite\b",
+    r"\bin.person\b", r"\bin person\b",
+]
 
+def is_onsite_or_hybrid(subject):
+    s = subject.lower()
+    for pattern in ONSITE_PATTERNS:
+        if re.search(pattern, s):
+            return True
+    return False
+
+# ══════════════════════════════════════════════════════════════════════════════
+# IRRELEVANT MODULE FILTER - skip roles outside Naveen's expertise
+# ══════════════════════════════════════════════════════════════════════════════
+IRRELEVANT_MODULES = [
+    "sap fico", "sap fi/co", "sap fi co", "sap finance", "sap treasury",
+    "sap fscm", "sap copa", "sap co ", "sap fi ", "sap ap ", "sap ar ",
+    "sap hcm", "sap successfactors", "sap basis", "sap abap",
+    "sap bw", "sap bi", "sap datasphere", "sap datashere",
+    "sap hana xsa", "sap is-u", "sap is utilities",
+    "sap eam", "sap pm", "sap gts", "sap btp", "sap cpi", "sap pi",
+    "sap concur", "sap ariba", "sap mdg", "sap master data",
+    "sap analytics cloud", "sap data conversion",
+    "sap test", "testing lead", "uat tester", "sap qa",
+    "sap project manager", "sap program manager",
+    "sap developer", "abap developer",
+    "sap convergent", "sap brim",
+    "salesforce", "oracle", "workday",
+    "sap pp ", "sap qm",
+]
+
+def is_irrelevant_module(subject):
+    s = subject.lower()
+    for mod in IRRELEVANT_MODULES:
+        if mod in s:
+            return mod
+    return None
+
+# ══════════════════════════════════════════════════════════════════════════════
+# REPLY TEMPLATE
+# ══════════════════════════════════════════════════════════════════════════════
 SHARED_REPLY = """Hi,
 
 
 
 
 In response to your job posting.
-Here I am attaching my updated resume.
+Here I am attaching my consultant's updated resume.
 Please review the resume and let me know if it matches your position.
 Looking forward to working with you.
 
-Best regards,
-Naveen
-Phone: +1 314-728-5792
-Email: naveenkadiyalasapsd@gmail.com"""
+Thanks & Regards,
+
+Sudheer Kumar, Mandava
+
+Mail: sudheer@adeptscripts.com
+
+Mobile: +1 940-209-1875
+
+8501 WADE BOULEVARD SUITE 870
+FRISCO TX 75033
+Recruitment Manager
+
+www.adeptscripts.com
+
+"""
 
 # ══════════════════════════════════════════════════════════════════════════════
-# BLOCKLIST - Skip non-SD SAP roles even if keyword matches
+# ROLES - SAP SD / OTC / Logistics focus
 # ══════════════════════════════════════════════════════════════════════════════
-BLOCKED_ROLES = [
-    "project manager", "program manager", "product manager",
-    "sap manager", "engagement manager", "delivery manager",
-    "account manager", "practice manager", "service manager",
-    "scrum master", "agile coach",
-    "sap director", "director of sap",
-    "sap architect", "solution architect", "enterprise architect",
-    "sap abap", "abap developer", "abap consultant",
-    "sap basis", "basis consultant", "basis administrator",
-    "sap fico", "sap fi consultant", "sap co consultant",
-    "sap mm consultant", "sap wm consultant", "sap pp consultant",
-    "sap hcm", "sap hr consultant", "sap successfactors",
-    "sap crm", "sap ariba", "sap mdg",
-    "sap technical", "sap developer",
-]
-
-def is_blocked_role(subject):
-    subject_lower = subject.lower()
-    return any(blocked in subject_lower for blocked in BLOCKED_ROLES)
-
-# ══════════════════════════════════════════════════════════════════════════════
-
 ROLES = [
     {
-        "name": "SAP SD Consultant",
+        "name": "SAP SD / OTC Consultant",
         "keywords": [
             "sap sd",
-            "sap sd consultant",
-            "sap sd functional",
-            "senior sap sd",
-            "sr sap sd",
-            "lead sap sd",
-            "sap sd lead",
             "sap sales and distribution",
             "sap sales & distribution",
-            "sap otc",
             "order to cash",
             "order-to-cash",
             "otc consultant",
-            "otc functional",
-            "sap order to cash",
+            "sap otc",
+            "quote to cash",
+            "quote-to-cash",
+            "sap sd consultant",
+            "sap sd lead",
+            "sap sd functional",
+            "sap sd otc",
+            "senior sap sd",
+            "sr sap sd",
+            "lead sap sd",
+        ],
+        "resume_file": "resume_naveen_b64.txt",
+        "cc_secret": "CC_NAVEEN",
+        "reply": SHARED_REPLY,
+    },
+    {
+        "name": "SAP SD Pricing / Condition Technique Consultant",
+        "keywords": [
+            "sap pricing",
+            "sap sd pricing",
+            "condition technique",
+            "pricing procedure",
+            "sap condition",
+            "sap rebate",
+            "sap discount",
+            "sap free goods",
+        ],
+        "resume_file": "resume_naveen_b64.txt",
+        "cc_secret": "CC_NAVEEN",
+        "reply": SHARED_REPLY,
+    },
+    {
+        "name": "SAP SD Billing / Revenue Consultant",
+        "keywords": [
+            "sap billing",
+            "sap sd billing",
+            "revenue account determination",
+            "sap invoice",
+            "sap invoicing",
+            "sap billing consultant",
+            "sap credit memo",
+            "sap debit memo",
+        ],
+        "resume_file": "resume_naveen_b64.txt",
+        "cc_secret": "CC_NAVEEN",
+        "reply": SHARED_REPLY,
+    },
+    {
+        "name": "SAP Logistics Execution / Shipping Consultant",
+        "keywords": [
+            "sap logistics execution",
+            "sap le consultant",
+            "sap shipping",
+            "sap delivery",
+            "sap transportation",
+            "sap shipment",
+            "post goods issue",
+            "sap pgi",
+            "sap outbound delivery",
+        ],
+        "resume_file": "resume_naveen_b64.txt",
+        "cc_secret": "CC_NAVEEN",
+        "reply": SHARED_REPLY,
+    },
+    {
+        "name": "SAP WM / Warehouse Management Consultant",
+        "keywords": [
+            "sap wm",
+            "sap wm-le",
+            "sap warehouse management",
+            "sap ewm",
+            "warehouse management consultant",
+            "sap wm consultant",
+            "sap storage bin",
+            "sap picking",
+            "sap wm le",
+        ],
+        "resume_file": "resume_naveen_b64.txt",
+        "cc_secret": "CC_NAVEEN",
+        "reply": SHARED_REPLY,
+    },
+    {
+        "name": "SAP S/4HANA Sales / Simple Logistics Consultant",
+        "keywords": [
+            "sap s/4hana sales",
+            "sap s4hana sales",
             "s/4hana sd",
             "s4hana sd",
-            "sap s/4 sd",
-            "s/4hana sales",
-            "sap functional consultant",
-            "sap ecc consultant",
-            "sap ecc sd",
-            "sap functional analyst",
-            "sap pricing consultant",
-            "sap billing consultant",
-            "sap shipping consultant",
-            "sap logistics execution",
-            "sap credit management",
-            "sap consultant",
-            "sap functional",
-            "sap implementation consultant",
-            "sap support consultant",
-            "sap business analyst",
+            "s/4 hana sd",
+            "s4 hana sd",
+            "sap simple logistics",
+            "sap s/4 sales",
+            "sap s4 sales",
+            "sap s/4hana otc",
+            "s4hana otc",
         ],
-        "resume_file": "resume_naveen_sap_sd_b64.txt",
-        "cc_secret": "CC_NAVEEN_SAP_SD",
+        "resume_file": "resume_naveen_b64.txt",
+        "cc_secret": "CC_NAVEEN",
+        "reply": SHARED_REPLY,
+    },
+    {
+        "name": "SAP Credit Management Consultant",
+        "keywords": [
+            "sap credit management",
+            "sap credit check",
+            "sap fscm credit",
+            "credit management consultant",
+            "sap credit limit",
+        ],
+        "resume_file": "resume_naveen_b64.txt",
+        "cc_secret": "CC_NAVEEN",
+        "reply": SHARED_REPLY,
+    },
+    {
+        "name": "SAP AFS / Variant Configuration Consultant",
+        "keywords": [
+            "sap afs",
+            "sap variant configuration",
+            "sap vc consultant",
+            "variant configuration consultant",
+            "sap avc",
+            "advanced variant configuration",
+        ],
+        "resume_file": "resume_naveen_b64.txt",
+        "cc_secret": "CC_NAVEEN",
         "reply": SHARED_REPLY,
     },
 ]
 
-REPLIED_LABEL = "AutoReplied_Naveen"
+# Fallback: subject has "sap sd" or "sap" + sales/logistics keyword
+FALLBACK_ROLE = {
+    "name": "SAP SD / Sales Consultant (General)",
+    "keywords": [],
+    "resume_file": "resume_naveen_b64.txt",
+    "cc_secret": "CC_NAVEEN",
+    "reply": SHARED_REPLY,
+}
+
+FALLBACK_KEYWORDS = [
+    "sap sd", "sales distribution", "order to cash", "otc",
+    "sap sales", "sap logistics", "sap shipping", "sap delivery",
+    "sap wm", "sap ewm", "warehouse management",
+    "sap s/4hana", "sap s4hana", "s/4 hana", "s4 hana",
+]
+
+REPLIED_LABEL = "AutoReplied_SAP_Naveen"
 
 SKIP_SENDERS = [
     "noreply@",
@@ -182,10 +331,14 @@ SKIP_SENDERS = [
     "notifications@github.com",
     "noreply.github.com",
     "notifications.monster.com",
+    "github.com",
     "sudheeritservices1@gmail.com",
-    "naveenkadiyalasapsd@gmail.com",
+    "sudheer@adeptscripts.com",
 ]
 
+# ══════════════════════════════════════════════════════════════════════════════
+# HELPERS
+# ══════════════════════════════════════════════════════════════════════════════
 def extract_address(s):
     if not s:
         return ""
@@ -237,6 +390,9 @@ def mark_as_replied(mail, uid):
     log.error("Failed to mark email as replied after 3 attempts")
     return mail
 
+# ══════════════════════════════════════════════════════════════════════════════
+# FETCH EMAILS
+# ══════════════════════════════════════════════════════════════════════════════
 def fetch_matching_emails():
     log.info("Connecting to Gmail via IMAP...")
     mail = connect_imap()
@@ -247,19 +403,22 @@ def fetch_matching_emails():
     replied_senders, send_count = load_daily_dedup()
     today = datetime.now().strftime("%d-%b-%Y")
 
+    # BROAD SEARCH - "SAP" catches all SAP variants
     all_uid_set = set()
-    for role in ROLES:
-        for kw in role["keywords"]:
-            try:
-                search_str = '(UNSEEN SINCE "' + today + '" SUBJECT "' + kw + '")'
-                _, msg_ids = mail.search(None, search_str)
+    search_queries = [
+        'SINCE "' + today + '" SUBJECT "SAP"',
+    ]
+    for q in search_queries:
+        try:
+            _, msg_ids = mail.search(None, q)
+            if msg_ids[0]:
                 for uid in msg_ids[0].split():
                     all_uid_set.add(uid)
-            except Exception:
-                pass
+        except Exception as e:
+            log.warning("Search failed for query '%s': %s", q, e)
 
     ids = list(all_uid_set)
-    log.info("Found %d matching unread emails today", len(ids))
+    log.info("Found %d matching emails today (SAP broad search)", len(ids))
 
     emails, seen_uids = [], set()
     for i, uid in enumerate(ids):
@@ -285,10 +444,6 @@ def fetch_matching_emails():
 
             subj_match = re.search(r"Subject:\s*(.+?)(?:\r?\n(?!\s)|\Z)", hdr_raw, re.IGNORECASE | re.DOTALL)
             subject = subj_match.group(1).strip().replace("\r\n", " ").replace("\n", " ") if subj_match else ""
-
-            if subject.lower().startswith("re:"):
-                log.info("Skipping - own reply thread: %s", subject[:50])
-                continue
 
             mid_match = re.search(r"Message-ID:\s*(.+)", hdr_raw, re.IGNORECASE)
             message_id = mid_match.group(1).strip() if mid_match else uid_str
@@ -330,17 +485,30 @@ def fetch_matching_emails():
     log.info("Ready to process %d emails", len(emails))
     return emails, mail, replied_senders, send_count
 
-def detect_role(email):
-    subject = email["subject"].lower()
-    if is_blocked_role(subject):
-        log.info("Blocked role - skipping: %s", subject[:50])
-        return None
+# ══════════════════════════════════════════════════════════════════════════════
+# ROLE DETECTION
+# ══════════════════════════════════════════════════════════════════════════════
+def detect_role(email_obj):
+    subject = email_obj["subject"].lower()
+
+    # Check all defined roles by keyword
     for role in ROLES:
         if any(kw in subject for kw in role["keywords"]):
-            log.info("Matched: %s", role["name"])
+            log.info("Matched role: %s", role["name"])
             return role
+
+    # Fallback: "sap" in subject + any SD/logistics keyword
+    if "sap" in subject:
+        for kw in FALLBACK_KEYWORDS:
+            if kw in subject:
+                log.info("Fallback → %s (matched '%s')", FALLBACK_ROLE["name"], kw)
+                return FALLBACK_ROLE
+
     return None
 
+# ══════════════════════════════════════════════════════════════════════════════
+# LOAD RESUME (base64 file → bytes)
+# ══════════════════════════════════════════════════════════════════════════════
 def get_resume(role):
     fname = role["resume_file"]
     if not Path(fname).exists():
@@ -361,15 +529,17 @@ def get_resume(role):
         b64 += "=" * (4 - missing)
     return base64.b64decode(b64)
 
-def send_reply(email, role, server):
-    smtp_email = os.environ["NAVEEN_SMTP_EMAIL"]
-    to_email = extract_address(email["reply_to"] or email["sender"])
+# ══════════════════════════════════════════════════════════════════════════════
+# SEND REPLY
+# ══════════════════════════════════════════════════════════════════════════════
+def send_reply(email_obj, role, server):
+    smtp_email = os.environ["NAVEEN_GMAIL_EMAIL"]
+    to_email = extract_address(email_obj["reply_to"] or email_obj["sender"])
     cc_email = os.environ.get(role["cc_secret"], "")
 
-    if not email["subject"].lower().startswith("re:"):
-        subject = "Re: " + email["subject"]
-    else:
-        subject = email["subject"]
+    subject = email_obj["subject"]
+    if not subject.lower().startswith("re:"):
+        subject = "Re: " + subject
 
     msg = MIMEMultipart()
     msg["From"] = smtp_email
@@ -384,7 +554,7 @@ def send_reply(email, role, server):
     part = MIMEBase("application", "vnd.openxmlformats-officedocument.wordprocessingml.document")
     part.set_payload(resume_bytes)
     encoders.encode_base64(part)
-    part.add_header("Content-Disposition", 'attachment; filename="Resume_Naveen_SAP_SD.docx"')
+    part.add_header("Content-Disposition", 'attachment; filename="Naveen_Kumar_SAP_SD_Resume.docx"')
     msg.attach(part)
 
     recipients = [to_email]
@@ -400,26 +570,30 @@ def send_reply(email, role, server):
 
     time.sleep(5)
 
-def log_sent(email, role):
+def log_sent(email_obj, role):
     csv_path = "logs/sent_log_naveen.csv"
     is_new = not os.path.exists(csv_path)
     with open(csv_path, "a") as f:
         if is_new:
             f.write("timestamp,role,sender,subject,cc\n")
         cc = os.environ.get(role["cc_secret"], "none")
-        f.write('{},"{}", "{}","{}","{}"\n'.format(
+        f.write('{},\"{}\",\"{}\",\"{}\",\"{}\"\n'.format(
             datetime.now().isoformat(),
             role["name"],
-            email["sender"],
-            email["subject"],
+            email_obj["sender"],
+            email_obj["subject"],
             cc
         ))
 
+# ══════════════════════════════════════════════════════════════════════════════
+# MAIN
+# ══════════════════════════════════════════════════════════════════════════════
 def main():
     log.info("=" * 70)
-    log.info("AI Email Agent - Naveen (SAP SD Consultant)")
-    log.info("SCAN inbox : sudheeritservices1@gmail.com")
-    log.info("SEND from  : naveenkadiyalasapsd@gmail.com")
+    log.info("AI Email Agent - Naveen Kumar Kadiyala (SAP SD / OTC / Logistics)")
+    log.info("SCAN inbox : %s (Gmail IMAP)", os.environ.get("IMAP_EMAIL", "***"))
+    log.info("SEND from  : %s (Gmail SMTP)", os.environ.get("NAVEEN_GMAIL_EMAIL", "***"))
+    log.info("REMOTE ONLY: On-site / hybrid / local roles are SKIPPED")
     log.info("Time       : %s", datetime.now().isoformat())
     log.info("=" * 70)
 
@@ -428,7 +602,7 @@ def main():
         return
     log.info("Within run window (6:30 PM - 4:30 AM IST). Proceeding...")
 
-    required = ["IMAP_EMAIL", "IMAP_APP_PASSWORD", "NAVEEN_SMTP_EMAIL", "NAVEEN_SMTP_APP_PASSWORD"]
+    required = ["IMAP_EMAIL", "IMAP_APP_PASSWORD", "NAVEEN_GMAIL_EMAIL", "NAVEEN_GMAIL_APP_PASSWORD"]
     missing = [r for r in required if not os.environ.get(r)]
     if missing:
         log.error("Missing env vars: %s", ", ".join(missing))
@@ -446,14 +620,15 @@ def main():
             pass
         return
 
-    smtp_email = os.environ["NAVEEN_SMTP_EMAIL"]
+    smtp_email = os.environ["NAVEEN_GMAIL_EMAIL"]
     smtp_server = None
     try:
-        smtp_server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
-        smtp_server.login(smtp_email, os.environ["NAVEEN_SMTP_APP_PASSWORD"])
-        log.info("SMTP connected: %s", smtp_email)
+        smtp_server = smtplib.SMTP("smtp.gmail.com", 587)
+        smtp_server.starttls()
+        smtp_server.login(smtp_email, os.environ["NAVEEN_GMAIL_APP_PASSWORD"])
+        log.info("SMTP connected (Gmail): %s", smtp_email)
     except Exception as e:
-        log.error("Could not connect to SMTP: %s", e)
+        log.error("Could not connect to Gmail SMTP: %s", e)
         try:
             mail.logout()
         except Exception:
@@ -463,12 +638,23 @@ def main():
     sent_senders = set()
     matched = 0
 
-    for email in emails:
-        log.info("JOB EMAIL: %s", email["subject"])
-        log.info("   From: %s", email["sender"])
+    for email_obj in emails:
+        log.info("JOB EMAIL: %s", email_obj["subject"])
+        log.info("   From: %s", email_obj["sender"])
 
         try:
-            sender_addr = email.get("sender_addr", extract_address(email["reply_to"] or email["sender"]))
+            # ── REMOTE ONLY FILTER ──
+            if is_onsite_or_hybrid(email_obj["subject"]):
+                log.info("SKIPPING (ON-SITE/HYBRID): %s", email_obj["subject"][:60])
+                continue
+
+            # ── IRRELEVANT MODULE FILTER ──
+            irr = is_irrelevant_module(email_obj["subject"])
+            if irr:
+                log.info("SKIPPING (IRRELEVANT MODULE '%s'): %s", irr, email_obj["subject"][:60].lower())
+                continue
+
+            sender_addr = email_obj.get("sender_addr", extract_address(email_obj["reply_to"] or email_obj["sender"]))
 
             if sender_addr in replied_senders:
                 log.info("SKIPPING - already replied to %s today", sender_addr)
@@ -478,9 +664,9 @@ def main():
                 log.info("SKIPPING - already replied to %s in this run", sender_addr)
                 continue
 
-            role = detect_role(email)
+            role = detect_role(email_obj)
             if role is None:
-                log.info("No matching role - skipping")
+                log.info("No SAP SD / OTC role matched in subject - skipping")
                 continue
 
             if daily_send_count >= MAX_DAILY_SENDS:
@@ -488,26 +674,28 @@ def main():
                 break
 
             matched += 1
-            log.info("SENDING REPLY... (%d/%d)", daily_send_count + 1, MAX_DAILY_SENDS)
-            send_reply(email, role, smtp_server)
-            log_sent(email, role)
-            mail = mark_as_replied(mail, email["uid"])
+            log.info("SENDING REPLY... (%d/%d) | Role: %s", daily_send_count + 1, MAX_DAILY_SENDS, role["name"])
+            send_reply(email_obj, role, smtp_server)
+            log_sent(email_obj, role)
+            mail = mark_as_replied(mail, email_obj["uid"])
 
             replied_senders.add(sender_addr)
             sent_senders.add(sender_addr)
             daily_send_count += 1
 
+            # Save dedup immediately after every send
             save_daily_dedup(replied_senders, daily_send_count)
 
         except Exception as e:
             log.error("Error processing email: %s", e, exc_info=True)
             try:
-                log.info("Reconnecting SMTP...")
-                smtp_server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
-                smtp_server.login(smtp_email, os.environ["NAVEEN_SMTP_APP_PASSWORD"])
-                log.info("SMTP reconnected successfully")
+                log.info("Reconnecting Gmail SMTP...")
+                smtp_server = smtplib.SMTP("smtp.gmail.com", 587)
+                smtp_server.starttls()
+                smtp_server.login(smtp_email, os.environ["NAVEEN_GMAIL_APP_PASSWORD"])
+                log.info("Gmail SMTP reconnected successfully")
             except Exception as se:
-                log.error("SMTP reconnect failed: %s", se)
+                log.error("Gmail SMTP reconnect failed: %s", se)
                 break
 
     try:
@@ -523,10 +711,11 @@ def main():
 
     log.info("=" * 70)
     log.info("Done - Replied to %d job emails", matched)
-    log.info("SCAN account : %s", os.environ.get("IMAP_EMAIL"))
-    log.info("SEND account : %s", os.environ.get("NAVEEN_SMTP_EMAIL"))
-    log.info("Daily sends  : %d/%d", daily_send_count, MAX_DAILY_SENDS)
-    log.info("Daily dedup  : %s (resets at midnight)", str(DEDUP_FILE))
+    log.info("On-site/hybrid skipped : (see log above)")
+    log.info("SCAN account           : %s", os.environ.get("IMAP_EMAIL", "***"))
+    log.info("SEND account           : %s", os.environ.get("NAVEEN_GMAIL_EMAIL", "***"))
+    log.info("Daily sends            : %d/%d", daily_send_count, MAX_DAILY_SENDS)
+    log.info("Daily dedup            : %s (resets at midnight)", str(DEDUP_FILE))
     log.info("Cost: 0.00")
     log.info("=" * 70)
 
