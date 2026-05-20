@@ -404,6 +404,7 @@ NAGA_PRIMARY_KEYWORDS = [
     "cvi", "customer vendor integration", "business partner migration",
     "rar", "revenue accounting", "asc 606", "revenue recognition",
     "sap sales", "sap sd",
+    "s/4hana sales", "s4hana sales", "s4 hana sales",  # Naga-specific S/4HANA Sales
 ]
 
 # These indicate Vamsee (SCM / Vistex / BRIM / S4HANA broad)
@@ -411,6 +412,40 @@ VAMSEE_PRIMARY_KEYWORDS = [
     "scm", "supply chain", "vistex", "brim", "subscription order",
     "condition contract", "ccm", "settlement management",
     "s/4hana", "s4hana", "s4 hana", "greenfield", "brownfield",
+]
+
+# ── Modules outside BOTH consultants' expertise → skip entirely ──────────────
+# These are SAP-branded but neither Naga (SD/OTC) nor Vamsee (SCM/BRIM) covers them.
+IRRELEVANT_KEYWORDS = [
+    # Finance / Controlling (not SD or SCM)
+    "fico", "fi/co", "fi co", "sap fi", "sap co ", "accounts payable",
+    "accounts receivable", "general ledger", "asset accounting",
+    "grant management", "funds management", "p2p finance",
+    "cfin", "central finance",
+    # Warehouse / Logistics (not SD)
+    "ewm", "wm-le", "warehouse management", "sap wm ", " wm ",
+    # Data / Analytics / Platform
+    "datasphere", "datashere", "hana xsa", "hana wam", "sap btp",
+    "sap cpi", "sap pi", "process integration", "sap po ", "sap avc",
+    "sap analytics cloud", "sap bi ", "sap bw ",
+    "data migration", "data conversion", "cutover lead",
+    # HR
+    "sap hcm", "sap successfactors", "sap ec ", "sap ecp",
+    # Manufacturing / Quality
+    "sap pp", "sap qm", "pp qm", "pp-pi", "production planning",
+    "quality management",
+    # Procurement (non-OTC)
+    "sap ariba", "sap mdg", "indirect procurement", "sap mm ",
+    "sap eam", "sap is-u", "sap isu", "is utilities",
+    "sap gts", "sap drc", "sap concur", "sap sybase",
+    # Oracle (completely different product)
+    "oracle", "oracle cloud", "oracle ebs", "oracle fusion",
+    "jde ", "peoplesoft",
+    # Technical / ABAP
+    "sap abap", "abap developer", "sap developer", "sap architect",
+    "sap program manager", "sap project manager",
+    "sap test", "sap uat", "sap qa", "test lead", "testing lead",
+    "sit and uat",
 ]
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -595,19 +630,29 @@ def detect_role(email_obj):
             log.info("Matched VAMSEE role: %s", role["name"])
             return role
 
-    # 3. Fallback discrimination: if subject has any SAP keyword, decide consultant
+    # 3. Skip roles that are clearly outside both consultants' expertise
+    irrelevant_hit = next((kw for kw in IRRELEVANT_KEYWORDS if kw in subject), None)
+    if irrelevant_hit:
+        log.info("SKIPPING (IRRELEVANT MODULE '%s'): %s", irrelevant_hit.strip(), subject[:60])
+        return None
+
+    # 4. Fallback discrimination: if subject has any SAP keyword, decide consultant
     sap_present = "sap" in subject or any(t in subject for t in SAP_SEARCH_TERMS)
     if sap_present:
-        # Check which consultant fits better via primary keywords
         naga_score = sum(1 for kw in NAGA_PRIMARY_KEYWORDS if kw in subject)
         vamsee_score = sum(1 for kw in VAMSEE_PRIMARY_KEYWORDS if kw in subject)
 
-        if naga_score >= vamsee_score:
+        # Only use fallback if at least one consultant has a positive signal
+        if naga_score > 0 and naga_score >= vamsee_score:
             log.info("Fallback → NAGA (naga_score=%d, vamsee_score=%d)", naga_score, vamsee_score)
             return FALLBACK_NAGA
-        else:
+        elif vamsee_score > 0:
             log.info("Fallback → VAMSEE (vamsee_score=%d, naga_score=%d)", vamsee_score, naga_score)
             return FALLBACK_VAMSEE
+        else:
+            # Both scores are 0 — no recognisable signal for either consultant → skip
+            log.info("SKIPPING (NO MATCH - scores both 0): %s", subject[:60])
+            return None
 
     return None
 
