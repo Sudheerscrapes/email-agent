@@ -1,7 +1,7 @@
 """
 AI Email Agent - Naveen Kumar Kadiyala (SAP SD / OTC / Logistics Consultant)
 Scans: sudheeritservices1@gmail.com (IMAP - Gmail)
-Sends: sudheer@adeptscripts.com (SMTP - Gmail)
+Sends: naveenkadiyalasapsd@gmail.com (SMTP - Gmail)
 Replies to: SAP SD, OTC, Order-to-Cash, Pricing, Shipping, WM, LE roles
 REMOTE ONLY: On-site / hybrid / local roles are SKIPPED
 
@@ -12,7 +12,7 @@ FIXES:
 4. Skips own sent emails
 5. REMOVED "Re:" skip - recruiters use RE: in fresh emails
 6. SCAN from sudheeritservices1@gmail.com (Gmail IMAP)
-7. SEND from sudheer@adeptscripts.com (Gmail SMTP)
+7. SEND from naveenkadiyalasapsd@gmail.com (Gmail SMTP)
 8. Daily send cap (450) to avoid limit errors
 9. SINGLE SMTP connection reused for all emails
 10. 5 second delay between sends (avoids spam detection)
@@ -333,7 +333,7 @@ SKIP_SENDERS = [
     "notifications.monster.com",
     "github.com",
     "sudheeritservices1@gmail.com",
-    "sudheer@adeptscripts.com",
+    "naveenkadiyalasapsd@gmail.com",  # skip own sent emails
 ]
 
 # ══════════════════════════════════════════════════════════════════════════════
