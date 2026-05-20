@@ -1,0 +1,39 @@
+name: Agent Rana - SAP FICO/FSCM/Treasury (Remote Only)
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'   # Every 15 minutes
+  workflow_dispatch:           # Manual trigger from Actions tab
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pytz
+
+      - name: Run Rana FICO Email Agent
+        env:
+          IMAP_EMAIL: ${{ secrets.IMAP_EMAIL }}
+          IMAP_APP_PASSWORD: ${{ secrets.IMAP_APP_PASSWORD }}
+          RANA_SMTP_EMAIL: ${{ secrets.RANA_SMTP_EMAIL }}
+          RANA_SMTP_APP_PASSWORD: ${{ secrets.RANA_SMTP_APP_PASSWORD }}
+          CC_RANA: ${{ secrets.CC_RANA }}
+        run: python agent_rana.py
+
+      - name: Upload logs as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rana-logs-${{ github.run_number }}
+          path: logs/
+          retention-days: 7
