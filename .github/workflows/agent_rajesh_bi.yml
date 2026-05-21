@@ -2,7 +2,7 @@ name: Agent Rajesh BI - Reporting Specialist (Remote Only)
 
 on:
   schedule:
-    - cron: '*/15 * * * *'   # Every 15 minutes
+    - cron: '*/20 * * * *'   # Every 15 minutes
   workflow_dispatch:           # Manual trigger from Actions tab
 
 jobs:
