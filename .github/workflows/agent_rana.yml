@@ -2,7 +2,7 @@ name: Agent Rana - SAP FICO/FSCM/Treasury (Remote Only)
 
 on:
   schedule:
-    - cron: '*/15 * * * *'   # Every 15 minutes
+    - cron: '*/25 * * * *'   # Every 15 minutes
   workflow_dispatch:           # Manual trigger from Actions tab
 
 jobs:
