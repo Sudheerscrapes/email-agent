@@ -2,8 +2,6 @@
 AI Email Agent - Siva B (SAP BTP / CPI / PI-PO Integration Architect)
 Scans: sudheeritservices1@gmail.com (IMAP - Gmail)
 Sends: sudheer@adeptscripts.com (SMTP - Zoho)
-Replies to: SAP BTP, CPI, PI/PO, Integration Architect, S/4 Hana roles
-REMOTE ONLY: Skips any role that is not explicitly remote
 
 FEATURES:
 1. Dedup checked FIRST before anything else
@@ -17,9 +15,10 @@ FEATURES:
 9. SINGLE SMTP connection reused for all emails
 10. 5 second delay between sends (avoids spam detection)
 11. certutil base64 header strip + padding fix
-12. BROAD IMAP search: "SAP" and "BTP" and "CPI" - catches ALL variants
+12. BROAD IMAP search: SAP / BTP / CPI / PI-PO / S4 / ARIBA
 13. REMOVED UNSEEN filter - catches read and unread emails
-14. REMOTE ONLY filter - skips non-remote roles
+14. REMOTE ONLY - checks BOTH subject AND body (first 500 bytes)
+15. Keywords strictly from Siva B resume - NO fallback matching
 """
 
 import os, base64, logging, re, smtplib, time, json
@@ -34,8 +33,14 @@ from email import encoders
 import pytz
 
 Path("logs").mkdir(exist_ok=True)
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.FileHandler("logs/agent_siva.log"), logging.StreamHandler()])
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler("logs/agent_siva.log"),
+        logging.StreamHandler()
+    ]
+)
 log = logging.getLogger(__name__)
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -81,7 +86,7 @@ def save_daily_dedup(senders, send_count=0):
         log.error("Could not save dedup file: %s", e)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TIME WINDOW CHECK
+# TIME WINDOW CHECK - 6:30 PM to 4:30 AM IST
 # ══════════════════════════════════════════════════════════════════════════════
 def is_within_run_window():
     ist = pytz.timezone("Asia/Kolkata")
@@ -120,7 +125,9 @@ www.adeptscripts.com
 """
 
 # ══════════════════════════════════════════════════════════════════════════════
-# ROLES - SAP BTP / CPI / PI-PO / Integration focused (Siva's expertise)
+# ROLES - Strictly based on Siva B resume skills only. NO fallback.
+# Resume skills: SAP BTP, CPI, PI/PO, XI, S/4 Hana Integration,
+#                ARIBA, B2B/EDI, IDOC/ALE, HANA, Delivery Manager
 # ══════════════════════════════════════════════════════════════════════════════
 ROLES = [
     {
@@ -131,16 +138,13 @@ ROLES = [
             "sap btp architect",
             "sap business technology platform architect",
             "btp architect",
-            "sap integration architect",
-            "integration architect sap",
-            "sap btp integration",
         ],
         "resume_file": "resume_siva_b64.txt",
         "cc_secret": "CC_SIVA",
         "reply": SHARED_REPLY,
     },
     {
-        "name": "SAP CPI / Integration Suite Developer",
+        "name": "SAP CPI / Integration Suite",
         "keywords": [
             "sap cpi",
             "sap integration suite",
@@ -159,7 +163,7 @@ ROLES = [
         "reply": SHARED_REPLY,
     },
     {
-        "name": "SAP PI/PO Developer / Consultant",
+        "name": "SAP PI/PO / XI Developer",
         "keywords": [
             "sap pi",
             "sap po",
@@ -183,35 +187,16 @@ ROLES = [
         "reply": SHARED_REPLY,
     },
     {
-        "name": "SAP S/4 Hana Integration Consultant",
+        "name": "SAP S/4 Hana Integration",
         "keywords": [
             "s/4 hana integration",
             "s4 hana integration",
             "s/4hana integration",
-            "sap s/4 hana consultant",
-            "sap s4 hana consultant",
+            "sap s/4 hana integration",
+            "sap s4 hana integration",
             "s/4 hana architect",
-            "sap hana integration",
             "s4hana integration consultant",
-        ],
-        "resume_file": "resume_siva_b64.txt",
-        "cc_secret": "CC_SIVA",
-        "reply": SHARED_REPLY,
-    },
-    {
-        "name": "SAP B2B / EDI Integration",
-        "keywords": [
-            "sap b2b integration",
-            "sap edi integration",
-            "sap b2b",
-            "sap edi",
-            "sap idoc",
-            "idoc developer",
-            "sap ale idoc",
-            "sap b2b developer",
-            "sap b2b consultant",
-            "sap edi developer",
-            "sap edi consultant",
+            "s/4hana architect",
         ],
         "resume_file": "resume_siva_b64.txt",
         "cc_secret": "CC_SIVA",
@@ -233,20 +218,46 @@ ROLES = [
         "reply": SHARED_REPLY,
     },
     {
-        "name": "SAP Integration / Solution Architect (General)",
+        "name": "SAP B2B / EDI / IDOC Integration",
         "keywords": [
-            "sap solution architect",
-            "sap technical architect",
-            "sap integration consultant",
-            "sap integration developer",
-            "sap integration engineer",
-            "sap integration specialist",
-            "sap middleware developer",
-            "sap middleware consultant",
+            "sap b2b integration",
+            "sap edi integration",
+            "sap b2b",
+            "sap edi",
+            "sap idoc",
+            "idoc developer",
+            "sap ale idoc",
+            "sap ale",
+            "sap b2b developer",
+            "sap b2b consultant",
+            "sap edi developer",
+            "sap edi consultant",
+        ],
+        "resume_file": "resume_siva_b64.txt",
+        "cc_secret": "CC_SIVA",
+        "reply": SHARED_REPLY,
+    },
+    {
+        "name": "SAP HANA Consultant",
+        "keywords": [
+            "sap hana consultant",
+            "sap hana developer",
+            "sap hana architect",
+            "sap hana certified",
+            "sap hana integration",
+        ],
+        "resume_file": "resume_siva_b64.txt",
+        "cc_secret": "CC_SIVA",
+        "reply": SHARED_REPLY,
+    },
+    {
+        "name": "SAP Delivery Manager / Project Manager",
+        "keywords": [
             "sap delivery manager",
             "sap project manager",
-            "sap techno functional",
-            "sap functional consultant",
+            "sap program manager",
+            "sap engagement manager",
+            "sap pm",
         ],
         "resume_file": "resume_siva_b64.txt",
         "cc_secret": "CC_SIVA",
@@ -254,14 +265,7 @@ ROLES = [
     },
 ]
 
-# Fallback: if subject has "sap" but no specific keyword matched
-FALLBACK_ROLE = {
-    "name": "SAP Consultant (General)",
-    "keywords": [],
-    "resume_file": "resume_siva_b64.txt",
-    "cc_secret": "CC_SIVA",
-    "reply": SHARED_REPLY,
-}
+# NO FALLBACK ROLE - if nothing matches resume skills, email is skipped
 
 REPLIED_LABEL = "AutoReplied_Siva"
 
@@ -277,7 +281,7 @@ SKIP_SENDERS = [
 ]
 
 # ══════════════════════════════════════════════════════════════════════════════
-# REMOTE FILTER - Only reply to remote roles
+# REMOTE FILTER - checks BOTH subject AND body (first 500 bytes)
 # ══════════════════════════════════════════════════════════════════════════════
 REMOTE_KEYWORDS = [
     "remote",
@@ -301,8 +305,10 @@ REMOTE_KEYWORDS = [
 ]
 
 def is_remote(email):
-    subject = email["subject"].lower()
-    return any(kw in subject for kw in REMOTE_KEYWORDS)
+    subject = email.get("subject", "").lower()
+    body = email.get("body", "").lower()
+    combined = subject + " " + body
+    return any(kw in combined for kw in REMOTE_KEYWORDS)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # HELPERS
@@ -368,7 +374,7 @@ def fetch_matching_emails():
     replied_senders, send_count = load_daily_dedup()
     today = datetime.now().strftime("%d-%b-%Y")
 
-    # ── BROAD SEARCH: catches SAP integration roles ──
+    # ── BROAD IMAP SEARCH - fetch SAP/BTP/CPI/PI-PO/S4/ARIBA emails ──
     all_uid_set = set()
     search_queries = [
         'SINCE "' + today + '" SUBJECT "SAP"',
@@ -389,7 +395,7 @@ def fetch_matching_emails():
             log.warning("Search failed for query '%s': %s", q, e)
 
     ids = list(all_uid_set)
-    log.info("Found %d matching emails today (SAP/BTP/CPI/PI-PO/S4/ARIBA)", len(ids))
+    log.info("Found %d matching emails today", len(ids))
 
     emails, seen_uids = [], set()
     for i, uid in enumerate(ids):
@@ -398,6 +404,7 @@ def fetch_matching_emails():
             continue
         seen_uids.add(uid_str)
 
+        # Reconnect IMAP every 50 emails to avoid timeout
         if i > 0 and i % 50 == 0:
             try:
                 mail.logout()
@@ -408,6 +415,7 @@ def fetch_matching_emails():
             mail = connect_imap()
 
         try:
+            # Fetch headers
             _, hdr_data = mail.fetch(uid, "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT MESSAGE-ID REPLY-TO)])")
             if not hdr_data or hdr_data[0] is None:
                 continue
@@ -438,15 +446,25 @@ def fetch_matching_emails():
                 log.warning("Could not extract sender email from: %s", sender)
                 continue
 
+            # Fetch first 500 bytes of body for remote keyword check
+            body_text = ""
+            try:
+                _, body_data = mail.fetch(uid, "(BODY.PEEK[TEXT]<0.500>)")
+                if body_data and body_data[0]:
+                    body_text = body_data[0][1].decode("utf-8", errors="ignore")
+            except Exception as be:
+                log.warning("Could not fetch body for %s: %s", uid_str, be)
+
             emails.append({
                 "uid": uid_str,
                 "message_id": message_id,
                 "subject": subject,
                 "sender": sender,
                 "reply_to": reply_to,
-                "sender_addr": sender_addr
+                "sender_addr": sender_addr,
+                "body": body_text,
             })
-            log.info("Queued: %s from %s", subject[:50], sender_addr)
+            log.info("Queued: %s | from %s", subject[:60], sender_addr)
             time.sleep(0.2)
 
         except Exception as e:
@@ -456,27 +474,30 @@ def fetch_matching_emails():
     log.info("Ready to process %d emails", len(emails))
     return emails, mail, replied_senders, send_count
 
+# ══════════════════════════════════════════════════════════════════════════════
+# ROLE DETECTION - Resume-based keywords only, NO fallback
+# ══════════════════════════════════════════════════════════════════════════════
 def detect_role(email):
     subject = email["subject"].lower()
 
-    # ── REMOTE FILTER: skip non-remote roles ──
+    # STEP 1: Remote filter - check subject AND body
     if not is_remote(email):
         log.info("SKIPPING (not remote): %s", email["subject"][:60])
         return None
 
-    # Check all roles by keyword
+    # STEP 2: Match strictly against resume skills - no fallback
     for role in ROLES:
         if any(kw in subject for kw in role["keywords"]):
             log.info("Matched role: %s", role["name"])
             return role
 
-    # Fallback: if subject contains "sap", still send
-    if "sap" in subject:
-        log.info("Fallback match: %s", FALLBACK_ROLE["name"])
-        return FALLBACK_ROLE
-
+    # No match - skip entirely
+    log.info("NO MATCH (not in Siva's skill set): %s", email["subject"][:60])
     return None
 
+# ══════════════════════════════════════════════════════════════════════════════
+# RESUME LOADER
+# ══════════════════════════════════════════════════════════════════════════════
 def get_resume(role):
     fname = role["resume_file"]
     if not Path(fname).exists():
@@ -497,8 +518,11 @@ def get_resume(role):
         b64 += "=" * (4 - missing)
     return base64.b64decode(b64)
 
+# ══════════════════════════════════════════════════════════════════════════════
+# SEND REPLY
+# ══════════════════════════════════════════════════════════════════════════════
 def send_reply(email, role, server):
-    smtp_email = os.environ["SIVA_SMTP_EMAIL"]  # sudheer@adeptscripts.com
+    smtp_email = os.environ["SIVA_SMTP_EMAIL"]
     to_email = extract_address(email["reply_to"] or email["sender"])
     cc_email = os.environ.get(role["cc_secret"], "")
 
@@ -535,6 +559,9 @@ def send_reply(email, role, server):
 
     time.sleep(5)
 
+# ══════════════════════════════════════════════════════════════════════════════
+# LOG SENT EMAIL TO CSV
+# ══════════════════════════════════════════════════════════════════════════════
 def log_sent(email, role):
     csv_path = "logs/sent_log_siva.csv"
     is_new = not os.path.exists(csv_path)
@@ -542,7 +569,7 @@ def log_sent(email, role):
         if is_new:
             f.write("timestamp,role,sender,subject,cc\n")
         cc = os.environ.get(role["cc_secret"], "none")
-        f.write('{},\"{}\", \"{}\",\"{}\",\"{}\"\n'.format(
+        f.write('{},\"{}\",\"{}\",\"{}\",\"{}\"\n'.format(
             datetime.now().isoformat(),
             role["name"],
             email["sender"],
@@ -550,12 +577,16 @@ def log_sent(email, role):
             cc
         ))
 
+# ══════════════════════════════════════════════════════════════════════════════
+# MAIN
+# ══════════════════════════════════════════════════════════════════════════════
 def main():
     log.info("=" * 70)
     log.info("AI Email Agent - Siva B (SAP BTP / CPI / PI-PO Integration Architect)")
     log.info("SCAN inbox : sudheeritservices1@gmail.com (Gmail IMAP)")
     log.info("SEND from  : sudheer@adeptscripts.com (Zoho SMTP)")
-    log.info("REMOTE ONLY: Yes - skips all non-remote roles")
+    log.info("REMOTE ONLY: Yes - checks subject AND body")
+    log.info("KEYWORDS   : Resume-based only, NO fallback")
     log.info("Time       : %s", datetime.now().isoformat())
     log.info("=" * 70)
 
@@ -582,7 +613,7 @@ def main():
             pass
         return
 
-    # Zoho SMTP settings
+    # Zoho SMTP connection
     smtp_email = os.environ["SIVA_SMTP_EMAIL"]
     smtp_server = None
     try:
@@ -601,8 +632,9 @@ def main():
     matched = 0
 
     for email in emails:
+        log.info("-" * 60)
         log.info("JOB EMAIL: %s", email["subject"])
-        log.info("   From: %s", email["sender"])
+        log.info("   From  : %s", email["sender"])
 
         try:
             sender_addr = email.get("sender_addr", extract_address(email["reply_to"] or email["sender"]))
@@ -612,19 +644,19 @@ def main():
                 continue
 
             if sender_addr in sent_senders:
-                log.info("SKIPPING - already replied to %s in this run", sender_addr)
+                log.info("SKIPPING - already replied to %s this run", sender_addr)
                 continue
 
             role = detect_role(email)
             if role is None:
-                continue  # logged inside detect_role
+                continue  # reason already logged in detect_role
 
             if daily_send_count >= MAX_DAILY_SENDS:
-                log.warning("DAILY LIMIT REACHED (%d/%d) - stopping for today.", daily_send_count, MAX_DAILY_SENDS)
+                log.warning("DAILY LIMIT REACHED (%d/%d) - stopping.", daily_send_count, MAX_DAILY_SENDS)
                 break
 
             matched += 1
-            log.info("SENDING REPLY... (%d/%d) | Role: %s", daily_send_count + 1, MAX_DAILY_SENDS, role["name"])
+            log.info("SENDING... (%d/%d) | Role: %s", daily_send_count + 1, MAX_DAILY_SENDS, role["name"])
             send_reply(email, role, smtp_server)
             log_sent(email, role)
             mail = mark_as_replied(mail, email["uid"])
@@ -642,7 +674,7 @@ def main():
                 log.info("Reconnecting Zoho SMTP...")
                 smtp_server = smtplib.SMTP_SSL("smtp.zoho.com", 465)
                 smtp_server.login(smtp_email, os.environ["SIVA_SMTP_APP_PASSWORD"])
-                log.info("Zoho SMTP reconnected successfully")
+                log.info("Zoho SMTP reconnected")
             except Exception as se:
                 log.error("Zoho SMTP reconnect failed: %s", se)
                 break
@@ -664,7 +696,6 @@ def main():
     log.info("SEND account : %s", os.environ.get("SIVA_SMTP_EMAIL"))
     log.info("Daily sends  : %d/%d", daily_send_count, MAX_DAILY_SENDS)
     log.info("Daily dedup  : %s (resets at midnight)", str(DEDUP_FILE))
-    log.info("Cost: 0.00")
     log.info("=" * 70)
 
 if __name__ == "__main__":
