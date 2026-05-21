@@ -2,7 +2,7 @@ name: Agent Siddarth - Salesforce Developer
 
 on:
   schedule:
-    - cron: '*/15 * * * *'   # Every 15 minutes
+    - cron: '*/30 * * * *'   # Every 15 minutes
   workflow_dispatch:           # Manual trigger from Actions tab
 
 jobs:
