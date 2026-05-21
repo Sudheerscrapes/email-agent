@@ -440,7 +440,7 @@ def send_reply(email, role, server):
     if cc_email:
         log.info("CCd       : %s", cc_email)
 
-    time.sleep(5)
+    time.sleep(10)
 
 def log_sent(email, role):
     csv_path = "logs/sent_log_satish.csv"
