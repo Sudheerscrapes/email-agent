@@ -579,7 +579,7 @@ def send_reply(email_obj, role, server):
     if cc_email:
         log.info("CCd       : %s", cc_email)
 
-    time.sleep(8)   # 8s delay — avoids Zoho 550 rate-limit errors
+    time.sleep(10)   # 8s delay — avoids Zoho 550 rate-limit errors
 
 def log_sent(email_obj, role):
     csv_path = "logs/sent_log_rana.csv"
