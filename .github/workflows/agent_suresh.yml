@@ -2,7 +2,6 @@ name: Agent Suresh - Network Engineer / Cisco / BGP / AWS / VMware NSX
 
 on:
   schedule:
-    # Runs every 30 min during IST window: 6:30 PM - 4:30 AM IST (13:00 - 23:00 UTC)
     - cron: '20,50 13-23 * * *'
   workflow_dispatch:
 
@@ -28,18 +27,7 @@ jobs:
           RESUME_B64: ${{ secrets.RESUME_SURESH_B64 }}
         run: |
           printf '%s' "$RESUME_B64" > resume_suresh_b64.txt
-          echo "" >> resume_suresh_b64.txt
           echo "Resume file size: $(wc -c < resume_suresh_b64.txt) bytes"
-          python3 -c "
-import base64, re
-raw = open('resume_suresh_b64.txt','rb').read()
-text = raw.decode('latin-1').strip()
-b64 = re.sub(r'\s+', '', text)
-missing = len(b64) % 4
-if missing: b64 += '=' * (4 - missing)
-decoded = base64.b64decode(b64)
-print(f'Resume decoded OK: {len(decoded)} bytes, valid docx: {decoded[:2] == b\"PK\"}')
-"
 
       - name: Run Agent Suresh
         env:
