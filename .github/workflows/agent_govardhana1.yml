@@ -31,9 +31,9 @@ jobs:
         env:
           IMAP_EMAIL: ${{ secrets.IMAP_EMAIL }}
           IMAP_APP_PASSWORD: ${{ secrets.IMAP_APP_PASSWORD }}
-          GOVARDHANA_SMTP_EMAIL: ${{ secrets.GOVARDHANA_SMTP_EMAIL }}
+          GOVARDHANA_SMTP_EMAIL: ${{ secrets.GOVARDHANA_SMTP_EMAIL1 }}
           GOVARDHANA_SMTP_APP_PASSWORD: ${{ secrets.GOVARDHANA_SMTP_APP_PASSWORD }}
-          CC_GOVARDHANA: ${{ secrets.CC_GOVARDHANA }}
+          CC_GOVARDHANA: ${{ secrets.CC_GOVARDHANA1 }}
         run: |
           python agent_govardhana.py
 
