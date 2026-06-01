@@ -1,0 +1,46 @@
+name: Agent Govardhana - SAP EWM / MM / WM / P2P
+
+on:
+  schedule:
+    # Runs every 30 min during IST window: 6:30 PM - 4:30 AM IST (13:00 - 23:00 UTC)
+    - cron: '10,40 13-23 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pytz
+
+      - name: Write resume file
+        run: |
+          echo "${{ secrets.RESUME_GOVARDHANA_B64 }}" > resume_govardhana_b64.txt
+
+      - name: Run Agent Govardhana
+        env:
+          IMAP_EMAIL: ${{ secrets.IMAP_EMAIL }}
+          IMAP_APP_PASSWORD: ${{ secrets.IMAP_APP_PASSWORD }}
+          GOVARDHANA_SMTP_EMAIL: ${{ secrets.GOVARDHANA_SMTP_EMAIL }}
+          GOVARDHANA_SMTP_APP_PASSWORD: ${{ secrets.GOVARDHANA_SMTP_APP_PASSWORD }}
+          CC_GOVARDHANA: ${{ secrets.CC_GOVARDHANA }}
+        run: |
+          python agent_govardhana.py
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: govardhana-logs-${{ github.run_number }}
+          path: logs/
+          retention-days: 7
