@@ -96,25 +96,36 @@ SHARED_REPLY = """Hi,
 
 
 
+In response to your job posting for a Network Engineer position.
 
-In response to your job posting.
-Here I am attaching my consultant's updated resume.
-Please review the resume and let me know if it matches your position.
+Please find attached the resume of my Resume, a Network Engineer with Cisco 3+ years of experience in enterprise networking, routing & switching, and cloud infrastructure.
+
+Key Highlights:
+- Hands-on experience with BGP, OSPF, EIGRP, ISIS, MPLS, VLANs, and VRFs
+- Proficient in Cisco platforms: Catalyst, Nexus (3K/5K/7K/9K), ASA Firewalls
+- Cloud networking: AWS (VPC, Security Groups, Route Tables), Azure, VMware NSX
+- Network security: Cisco ISE, Palo Alto, GlobalProtect VPN, ACLs, Zero Trust
+- Automation: Python, Bash, REST APIs, YAML-based config automation
+- Tools: SolarWinds, Wireshark, Splunk, TCPDump, Cisco DNA Center
+- Currently working at Cisco (Sep 2025 – Present)
+
+Please review the resume and let me know if it matches your requirement.
 Looking forward to working with you.
 
 Thanks & Regards,
 
-Sudheer Kumar, Mandava
 
-Mail: sudheer@adeptscripts.com
+--
+Best Regards,
+Suresh Akula
+akulassuresh@gmail.com    
++1 475-308-9709	 
+Santa Clara, CA 95051   
 
-Mobile: +1 940-209-1875
 
-8501 WADE BOULEVARD SUITE 870
-FRISCO TX 7503
-Recruitment Manager
+https://www.linkedin.com/in/akulasureshs/
 
-www.adeptscripts.com
+
 
 """
 
