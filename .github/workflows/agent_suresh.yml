@@ -1,0 +1,46 @@
+name: Agent Suresh - Network Engineer / Cisco / BGP / AWS / VMware NSX
+
+on:
+  schedule:
+    # Runs every 30 min during IST window: 6:30 PM - 4:30 AM IST (13:00 - 23:00 UTC)
+    - cron: '20,50 13-23 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pytz
+
+      - name: Write resume file
+        run: |
+          echo "${{ secrets.RESUME_SURESH_B64 }}" > resume_suresh_b64.txt
+
+      - name: Run Agent Suresh
+        env:
+          IMAP_EMAIL: ${{ secrets.IMAP_EMAIL }}
+          IMAP_APP_PASSWORD: ${{ secrets.IMAP_APP_PASSWORD }}
+          SURESH_SMTP_EMAIL: ${{ secrets.SURESH_SMTP_EMAIL }}
+          SURESH_SMTP_APP_PASSWORD: ${{ secrets.SURESH_SMTP_APP_PASSWORD }}
+          CC_SURESH: ${{ secrets.CC_SURESH }}
+        run: |
+          python agent_suresh.py
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: suresh-logs-${{ github.run_number }}
+          path: logs/
+          retention-days: 7
